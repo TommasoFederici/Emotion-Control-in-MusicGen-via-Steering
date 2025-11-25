@@ -1,0 +1,18 @@
+# Core Model
+audiocraft              # Libreria Meta per MusicGen
+xformers                # (Opzionale ma raccomandato) Velocizza enormemente i Transformer
+
+# Data & Math
+numpy
+pandas                  # Utile per gestire i CSV dei prompt
+scipy                   # Per calcoli di distanza (cosine similarity)
+
+# Audio Processing & Evaluation
+librosa                 # Analisi audio standard
+soundfile               # Backend per leggere/scrivere audio
+laion-clap              # PER LA VALUTAZIONE (Punto 3 del progetto)
+
+# Utilities
+tqdm                    # Barre di caricamento
+ipykernel               # Se volete usare i Notebook .ipynb
+matplotlib              # Per i grafici finali
