@@ -37,7 +37,7 @@ Abbiamo creato uno script che installa PyTorch con supporto GPU e tutte le libre
 
 Con il venv attivo, esegui:
 
-setup_env.bat
+setup/setup_env.bat
 
 *Attendi la fine del processo (potrebbe volerci qualche minuto per scaricare PyTorch).*
 
