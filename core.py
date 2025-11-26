@@ -90,7 +90,19 @@ class ActivationHook:
 
     def hook_fn(self, module, input, output):
         if isinstance(output, tuple): output = output[0]
-        self.activations.append(output.detach().cpu()) # Clone non necessario se detachiamo subito
+        # --- FIX CFG: PRENDIAMO SOLO IL PRIMO ELEMENTO ---
+        # MusicGen usa Classifier Free Guidance (CFG).
+        # Output shape: [Batch=2, Time, Dim]
+        # Batch 0 = Condizionato (Testo) -> QUELLO CHE VOGLIAMO
+        # Batch 1 = Incondizionato (Null) -> SPORCIZIA DA SCARTARE
+        
+        # Se il batch è maggiore di 1, prendiamo solo il primo elemento
+        if output.shape[0] > 1:
+            clean_output = output[0:1] # Diventa [1, Time, Dim]
+        else:
+            clean_output = output
+
+        self.activations.append(clean_output.detach().cpu())
 
     def register(self):
         self.handle = self.module.register_forward_hook(self.hook_fn)
