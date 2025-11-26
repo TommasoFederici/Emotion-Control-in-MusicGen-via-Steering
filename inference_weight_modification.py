@@ -74,7 +74,7 @@ def run_inference():
 
     # 1. Carica vettore
     try:
-        vector_path = "vector_happy_sad_layer14.pt" 
+        vector_path = r"data\vectors\steering_vector_Sad2Happy_layer14_avg50.pt" 
         steering_vector = torch.load(vector_path)
         print(f"📦 Vettore caricato: {vector_path}")
     except FileNotFoundError:
