@@ -77,10 +77,13 @@ def run_dataset_extraction():
         hook.remove()
 
         # --- STEP C: DIFFERENZA (Happy - Sad) ---
-        # Calcoliamo la direzione per QUESTA coppia specifica
         current_diff = vec_happy - vec_sad
 
-        # --- STEP D: ACCUMULO (Media Progressiva) ---
+        # [FIX] Normalizziamo subito per dare a ogni coppia lo stesso "peso"
+        # Altrimenti una coppia con valori altissimi comanda su tutte le altre.
+        current_diff = current_diff / (current_diff.norm() + 1e-8)
+
+        # --- STEP D: ACCUMULO ---
         if cumulative_steering_vector is None:
             cumulative_steering_vector = current_diff
         else:
