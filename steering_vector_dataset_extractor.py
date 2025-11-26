@@ -109,6 +109,7 @@ def run_dataset_extraction():
     print(f"💾 Vettore salvato in: {save_path}")
     print(f"🎧 Audio salvati in: {output_audio_dir}")
     print(f"📈 Coppie processate: {count}")
+    print(f"Shape vettore finale: {final_steering_vector.shape}")
 
 if __name__ == "__main__":
     run_dataset_extraction()

@@ -112,6 +112,7 @@ def run_extraction():
     # Normalizzazione (Opzionale ma consigliata)
     # Rende il vettore lungo 1, così possiamo decidere noi l'intensità dopo con un moltiplicatore
     steering_vector = steering_vector / steering_vector.norm()
+    print(f"   ✅ Vettore Steering normalizzato. Shape: {steering_vector.shape}")
     
     # Salva il risultato
     filename = "vector_happy_sad_layer14.pt"

@@ -8,13 +8,13 @@ def run_diagnostics():
     # --- 1. ANALISI DEL VETTORE ---
     try:
         # Cerca il file vettore più recente o specifico
-        vector_path = "vector_happy_sad_layer14.pt" 
+        vector_path = "data/vectors/steering_vector_Sad2Happy_layer14_avg50.pt" 
         if not os.path.exists(vector_path):
             # Fallback su cartella vectors se esiste
-            if os.path.exists("vectors"):
-                files = os.listdir("vectors")
+            if os.path.exists("data/vectors"):
+                files = os.listdir("data/vectors")
                 if files:
-                    vector_path = os.path.join("vectors", files[0])
+                    vector_path = os.path.join("data/vectors", files[0])
         
         print(f"📂 Analizzando: {vector_path}")
         vec = torch.load(vector_path)
@@ -45,11 +45,11 @@ def run_diagnostics():
     target_layer = mg.model.lm.transformer.layers[14]
     steerer = WeightSteering(target_layer, vec)
     
-    prompt = "A simple acoustic guitar melody"
+    prompt = "classic guitar solo"
     os.makedirs("sweep_test", exist_ok=True)
     
     # Proviamo valori MOLTO diversi, anche piccoli
-    alphas = [0.5, 1.0, 2.0, 3.0, 5.0]
+    alphas = [0.2, 0.4, 0.6, 0.8, 1.0]
     
     print(f"🧪 Generazione varianti per prompt: '{prompt}'")
     
