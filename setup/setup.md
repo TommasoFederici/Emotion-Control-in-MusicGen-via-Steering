@@ -3,6 +3,11 @@
 Questa guida serve per configurare l'ambiente di sviluppo su Windows per il progetto di AML.
 Il setup gestisce automaticamente le dipendenze complesse di PyTorch (CUDA) e AudioCraft.
 
+Per attivare il venv eseguire ogni volta:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+.\venv\Scripts\activate
+
+
 ### Prerequisiti
 Prima di iniziare, assicurati di avere:
 1. Python 3.9 o superiore installato.
