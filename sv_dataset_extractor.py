@@ -5,10 +5,6 @@ from tqdm import tqdm  # Per la barra di caricamento
 from project_base import MusicGenWrapper
 from extraction import ActivationHook
 
-# Assumo che le tue classi siano in un file chiamato 'model_utils.py' o simile
-# Se sono nello stesso file, lasciale pure lì.
-# from model_utils import MusicGenWrapper, ActivationHook 
-
 def run_dataset_extraction():
     print("\n🧪 AVVIO ESTRAZIONE MASSIVA (DATASET COMPLETO)...")
 
