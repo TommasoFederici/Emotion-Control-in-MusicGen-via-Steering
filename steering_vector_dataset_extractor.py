@@ -5,17 +5,13 @@ from tqdm import tqdm  # Per la barra di caricamento
 from project_base import MusicGenWrapper
 from extraction import ActivationHook
 
-# Assumo che le tue classi siano in un file chiamato 'model_utils.py' o simile
-# Se sono nello stesso file, lasciale pure lì.
-# from model_utils import MusicGenWrapper, ActivationHook 
-
 def run_dataset_extraction():
     print("\n🧪 AVVIO ESTRAZIONE MASSIVA (DATASET COMPLETO)...")
 
     # --- CONFIGURAZIONE ---
     csv_path = "data/Happy_Sad/dataset_prompt_Happy_Sad.csv"
     output_audio_dir = "data/Happy_Sad/train_audio"  # Dove salvare gli audio generati
-    vector_output_dir = "vectors"          # Dove salvare il vettore finale
+    vector_output_dir = "data/vectors"          # Dove salvare il vettore finale
     target_layer_idx = 14                  # Il layer scelto
     duration_sec = 5                      # Durata audio (come nel paper)
     emotion_direction = "Sad2Happy"
@@ -77,10 +73,13 @@ def run_dataset_extraction():
         hook.remove()
 
         # --- STEP C: DIFFERENZA (Happy - Sad) ---
-        # Calcoliamo la direzione per QUESTA coppia specifica
         current_diff = vec_happy - vec_sad
 
-        # --- STEP D: ACCUMULO (Media Progressiva) ---
+        # [FIX] Normalizziamo subito per dare a ogni coppia lo stesso "peso"
+        # Altrimenti una coppia con valori altissimi comanda su tutte le altre.
+        current_diff = current_diff / (current_diff.norm() + 1e-8)
+
+        # --- STEP D: ACCUMULO ---
         if cumulative_steering_vector is None:
             cumulative_steering_vector = current_diff
         else:
