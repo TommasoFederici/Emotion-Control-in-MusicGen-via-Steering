@@ -29,3 +29,5 @@ einops
 julius
 omegaconf
 hydra-core
+av
+spacy
