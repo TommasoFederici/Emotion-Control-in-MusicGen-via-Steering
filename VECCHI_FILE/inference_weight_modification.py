@@ -1,5 +1,5 @@
 import torch
-from project_base import MusicGenWrapper
+from VECCHI_FILE.project_base import MusicGenWrapper
 import copy
 
 # ==========================================

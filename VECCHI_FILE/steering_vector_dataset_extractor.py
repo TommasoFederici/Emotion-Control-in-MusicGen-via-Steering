@@ -2,8 +2,8 @@ import torch
 import pandas as pd
 import os
 from tqdm import tqdm  # Per la barra di caricamento
-from project_base import MusicGenWrapper
-from extraction import ActivationHook
+from VECCHI_FILE.project_base import MusicGenWrapper
+from VECCHI_FILE.extraction import ActivationHook
 
 def run_dataset_extraction():
     print("\n🧪 AVVIO ESTRAZIONE MASSIVA (DATASET COMPLETO)...")
@@ -11,9 +11,9 @@ def run_dataset_extraction():
     # --- CONFIGURAZIONE ---
     csv_path = "data/Happy_Sad/dataset_prompt_Happy_Sad.csv"
     output_audio_dir = "data/Happy_Sad/train_audio"  # Dove salvare gli audio generati
-    vector_output_dir = "data/vectors"          # Dove salvare il vettore finale
-    target_layer_idx = 14                  # Il layer scelto
-    duration_sec = 5                      # Durata audio (come nel paper)
+    vector_output_dir = "data/vectors"               # Dove salvare il vettore finale
+    target_layer_idx = 14                            # Il layer scelto
+    duration_sec = 5                                 # Durata audio (come nel paper)
     emotion_direction = "Sad2Happy"
     
     # Crea le cartelle se non esistono

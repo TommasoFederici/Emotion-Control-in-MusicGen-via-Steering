@@ -1,1 +1,3 @@
-** CONTROLLARE ESTRAZIONE STEERING VECTOR, MUSIC GEN PROCESSA 2 AUDIO INSIEME, UNO CONDIZIONATO SUL PROMPT E UNO UNCOND E POI CREA L'OUTPUT, PRENDIAMO SOLO IL PRIMO NON TUTTI E DUE
+** Vettore introduce troppo rumore, provare a ripulirlo o altri layer
+
+** Rendere nome vettore ''automatico'' ovunque
