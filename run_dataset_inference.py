@@ -3,14 +3,17 @@ from core import MusicGenWrapper, DatasetInference
 def main():
     # --- CONFIGURAZIONE ---
     prompts_file = "data/Happy_Sad/test_prompt_Happy_Sad.txt"  
-    vector_file = "data/vectors/steering_vector_Sad2Happy_layer14_avg50.pt"
+    vector_file = "data/vectors/steering_vector_Sad2Happy_"
     output_dir = "data/Happy_Sad/results_final"
     
     # Parametri
     alpha = 0.3
     duration_sec = 5  # Durata audio generato per ogni prompt
     layer_idx = 14
+
+    NUM_TEST = 2      # Mettere None per usare tutti i prompt nel file
     
+    vector_file += f"layer{layer_idx}"
 
     # --- ESECUZIONE ---
     mg = MusicGenWrapper(size='small', duration=duration_sec)
@@ -20,7 +23,8 @@ def main():
         prompts_file=prompts_file,
         vector_path=vector_file,
         output_dir=output_dir,
-        alpha=alpha
+        alpha=alpha,
+        max_samples=NUM_TEST
     )
 
 if __name__ == "__main__":

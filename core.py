@@ -311,27 +311,29 @@ class DatasetExtractor:
 
 
 # =========================================================================
-# 🚀 SEZIONE 6: DATASET INFERENCE (CLASSE)
+# 🚀 SEZIONE 6: DATASET INFERENCE (CLASSE AGGIORNATA)
 # =========================================================================
 class DatasetInference:
     """
     Applica lo steering su una lista di prompt di test (Batch Inference).
     Genera 3 varianti per ogni prompt: Originale, Positivo, Negativo.
+    Supporta input CSV con colonne ID;test_prompt.
     """
     def __init__(self, model_wrapper, layer_idx=14):
         self.mg = model_wrapper
         self.layer_idx = layer_idx
         self.target_layer = self.mg.model.lm.transformer.layers[layer_idx]
 
-    def run(self, prompts_file, vector_path, output_dir, alpha=1.5):
+    def run(self, prompts_file, vector_path, output_dir, alpha=1.5, max_samples=None):
         """
-        Esegue il test su tutti i prompt nel file txt.
+        Esegue il test su tutti i prompt (o su un sottoinsieme).
         
         Args:
-            prompts_file: Percorso al file .txt (un prompt per riga).
+            prompts_file: Percorso al file CSV (colonne: ID;test_prompt).
             vector_path: Percorso al file .pt del vettore.
             output_dir: Cartella dove salvare i risultati.
             alpha: Intensità dello steering (es. 1.5).
+            max_samples: (Opzionale) Numero massimo di prompt da processare (es. 2 per test veloce).
         """
         print(f"\n🚀 AVVIO INFERENZA BATCH (Layer {self.layer_idx}, Alpha {alpha})")
         
@@ -340,7 +342,7 @@ class DatasetInference:
             steering_vector = torch.load(vector_path)
             print(f"📦 Vettore caricato: {vector_path} | Shape: {steering_vector.shape}")
             
-            # FIX SHAPE ROBUSTO: Se il vettore è [2, 1024], prendiamo la media o il primo
+            # FIX SHAPE ROBUSTO
             if steering_vector.dim() == 2 and steering_vector.shape[0] > 1:
                 print("⚠️ Vettore con batch > 1 rilevato. Appiattimento...")
                 steering_vector = steering_vector.mean(dim=0, keepdim=True)
@@ -352,44 +354,69 @@ class DatasetInference:
             print(f"❌ Errore caricamento vettore: {e}")
             return
 
-        # 2. Preparazione Prompt
+        # 2. Lettura Dataset CSV
         if not os.path.exists(prompts_file):
             print(f"❌ Errore: Manca il file prompt {prompts_file}")
             return
             
-        with open(prompts_file, 'r', encoding='utf-8') as f:
-            prompts = [line.strip() for line in f if line.strip()]
+        try:
+            # Leggiamo il CSV con separatore ;
+            df = pd.read_csv(prompts_file, sep=';')
+            print(f"📋 Prompt totali nel CSV: {len(df)}")
             
-        print(f"📋 Prompt da processare: {len(prompts)}")
+            # --- FILTRO NUMERO MASSIMO ---
+            if max_samples is not None:
+                df = df.head(max_samples)
+                print(f"✂️ LIMITAZIONE ATTIVA: Eseguo solo i primi {max_samples} prompt.")
+                
+        except Exception as e:
+            print(f"❌ Errore lettura CSV: {e}")
+            return
+
         os.makedirs(output_dir, exist_ok=True)
 
         # 3. Inizializzazione Steerer
         steerer = WeightSteering(self.target_layer, steering_vector)
 
         # 4. Ciclo di Generazione
-        for i, prompt in enumerate(tqdm(prompts, desc="Batch Inference")):
-            # Nome file pulito
-            safe_prompt = "".join([c for c in prompt if c.isalnum() or c in " _-"])[:30].replace(" ", "_")
-            base_name = os.path.join(output_dir, f"{i:02d}_{safe_prompt}")
-
+        for index, row in tqdm(df.iterrows(), total=len(df), desc="Batch Inference"):
             try:
+                # Estraiamo ID e test_prompt dal CSV
+                # Gestione flessibile dei nomi delle colonne
+                prompt_id = str(row.get('ID', row.get('id', index))).strip()
+                
+                # Cerca 'test_prompt', se non c'è cerca 'prompt', se no l'ultima colonna
+                if 'test_prompt' in row:
+                    prompt_text = str(row['test_prompt']).strip()
+                elif 'prompt' in row:
+                    prompt_text = str(row['prompt']).strip()
+                else:
+                    prompt_text = str(row.iloc[-1]).strip()
+                
+                # Pulizia per il nome file
+                safe_prompt = "".join([c for c in prompt_text if c.isalnum() or c in " _-"])[:20].replace(" ", "_")
+                
+                # Nome base: "ID_PromptParziale"
+                base_name = os.path.join(output_dir, f"test_{prompt_id}_{safe_prompt}")
+
                 # A. Originale (Base)
-                # Utile per avere un confronto "ground truth"
-                self.mg.generate(prompt, f"{base_name}_original")
+                self.mg.generate(prompt_text, f"{base_name}_original")
 
                 # B. Positivo (Happy)
                 steerer.apply(coefficient=alpha)
-                self.mg.generate(prompt, f"{base_name}_pos")
+                self.mg.generate(prompt_text, f"{base_name}_pos")
                 steerer.remove() # Reset immediato
 
                 # C. Negativo (Sad)
                 steerer.apply(coefficient=-alpha)
-                self.mg.generate(prompt, f"{base_name}_neg")
+                self.mg.generate(prompt_text, f"{base_name}_neg")
                 steerer.remove() # Reset immediato
                 
+                # Pulizia VRAM ogni tanto
+                if index % 5 == 0: torch.cuda.empty_cache()
+                
             except Exception as e:
-                print(f"❌ Errore sul prompt '{prompt}': {e}")
-                # Assicuriamoci di rimuovere lo steering in caso di errore per non inquinare il prossimo
+                print(f"❌ Errore sul prompt ID {prompt_id}: {e}")
                 steerer.remove() 
 
         print(f"\n✅ INFERENZA COMPLETATA.")
