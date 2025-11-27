@@ -2,38 +2,35 @@ import torch
 import pandas as pd
 import os
 from tqdm import tqdm
-import logging
-
-# Configurazione Base per Colab
-logging.getLogger("audiocraft").setLevel(logging.ERROR)
-
-# =========================================================================
-# 🎵 SEZIONE 1: MUSICGEN WRAPPER
-# =========================================================================
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
+import logging
 
+# Silenzia log di sistema
+logging.getLogger("audiocraft").setLevel(logging.ERROR)
+
+# ==========================================
+# 1. WRAPPER MODELLO
+# ==========================================
 class MusicGenWrapper:
     def __init__(self, size='small', duration=5):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"🚀 MusicGen ({size}) | Device: {self.device} | Durata: {duration}s")
-        # Su Colab non serve nessun parametro strano, xformers viene caricato in automatico
         self.model = MusicGen.get_pretrained(size)
         self.model.set_generation_params(duration=duration)
 
     def generate(self, prompt, filename=None):
-        # Su Colab possiamo tenere i progress bar se vogliamo, ma qui li nascondiamo per pulizia
         wav = self.model.generate([prompt], progress=False)
-        
         if filename:
             if filename.endswith(".wav"): filename = filename[:-4]
-            path = audio_write(filename, wav[0].cpu(), self.model.sample_rate, strategy="loudness", loudness_headroom_db=16)
-        
+            # Assicura che la cartella esista
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            audio_write(filename, wav[0].cpu(), self.model.sample_rate, strategy="loudness", loudness_headroom_db=16)
         return wav
 
-# =========================================================================
-# 🔬 SEZIONE 2: ESTRAZIONE (ActivationHook)
-# =========================================================================
+# ==========================================
+# 2. ACTIVATION HOOK (Per Estrazione)
+# ==========================================
 class ActivationHook:
     def __init__(self, module):
         self.module = module
@@ -41,19 +38,13 @@ class ActivationHook:
         self.activations = [] 
 
     def hook_fn(self, module, input, output):
-        # Gestione Output Tuple
         if isinstance(output, tuple): output = output[0]
         
-        # --- FIX CFG (Classifier Free Guidance) ---
-        # Se il batch è > 1 (es. 2: Condizionato + Incondizionato), 
+        # FIX CFG: Se c'è batch > 1 (Condizionato + Incondizionato), 
         # prendiamo solo la parte condizionata (Indice 0)
-        if output.shape[0] > 1:
-            # Prende slice [0:1] per mantenere le dimensioni [1, Time, Dim]
-            clean_output = output[0:1] 
-        else:
-            clean_output = output
-
-        self.activations.append(clean_output.detach().cpu())
+        if output.shape[0] > 1: output = output[0:1]
+        
+        self.activations.append(output.detach().cpu())
 
     def register(self):
         self.handle = self.module.register_forward_hook(self.hook_fn)
@@ -65,69 +56,72 @@ class ActivationHook:
     def get_mean_vector(self):
         if not self.activations: return None
         full = torch.cat(self.activations, dim=1)
-        # Media sul tempo
+        # Media sul tempo [Batch, Time, Dim] -> [Dim]
         return full.mean(dim=1).squeeze()
 
-# =========================================================================
-# 🎛️ SEZIONE 3: INFERENZA (WeightSteering)
-# =========================================================================
-class WeightSteering:
-    """Modifica i Bias per lo steering. Metodo stabile e matematicamente valido."""
+# ==========================================
+# 3. DYNAMIC STEERING (Metodo Paper) 🔥
+# ==========================================
+class DynamicSteering:
+    """
+    Applica Activation Steering usando la formula normalizzata del paper.
+    Formula: h_new = (h_old + alpha * vector) / (1 + alpha)
+    """
     def __init__(self, module, steering_vector):
         self.module = module
-        self.original_bias = None
+        self.handle = None
+        self.alpha = 0.0
         
+        # Setup Device e Vettore
         try:
             device = next(module.parameters()).device
         except:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             
-        self.steering_vector = steering_vector.to(device).float()
+        # Il vettore deve essere [1, 1, Dim] per essere sommato a [Batch, Time, Dim]
+        self.vector = steering_vector.to(device).float()
+        if self.vector.dim() == 1:
+            self.vector = self.vector.view(1, 1, -1)
+        elif self.vector.dim() == 2: # Se è [1, 1024]
+            self.vector = self.vector.unsqueeze(1) # Diventa [1, 1, 1024]
+
+    def hook_fn(self, module, input, output):
+        # Gestione output MusicGen (Tuple: Tensor, Cache)
+        if isinstance(output, tuple):
+            h = output[0]
+            other = output[1:]
+        else:
+            h = output
+            other = ()
+
+        # --- FORMULA DEL PAPER ---
+        # Questa formula evita che il volume "esploda" quando sommiamo il vettore.
+        # h: Flusso originale
+        # v: Vettore Emozione
+        # alpha: Intensità
         
+        # Nota: Usiamo abs(alpha) al denominatore per stabilità se alpha è negativo
+        h_new = (h + (self.alpha * self.vector)) / (1 + abs(self.alpha))
+        
+        if other:
+            return (h_new,) + other
+        return h_new
+
     def apply(self, coefficient=1.0):
-        # Cerca il target (linear2 o out_proj)
-        linear_module = None
-        if hasattr(self.module, 'linear2'):
-            linear_module = self.module.linear2
-        elif hasattr(self.module, 'out_proj'):
-            linear_module = self.module.out_proj
-        else:
-            for m in self.module.modules():
-                if isinstance(m, torch.nn.Linear):
-                    linear_module = m
-        
-        if not linear_module: return # Fail silent or raise error
-
-        self.target_module = linear_module 
-
-        # Salva Bias Originale
-        if linear_module.bias is not None:
-            self.original_bias = linear_module.bias.data.clone()
-        else:
-            self.original_bias = None
-            linear_module.bias = torch.nn.Parameter(
-                torch.zeros(linear_module.out_features, device=linear_module.weight.device)
-            )
-        
-        # Applica Delta
-        delta = self.steering_vector.view(-1) * coefficient
-        
-        # Adattamento dimensionale (Safety)
-        if delta.shape[0] != linear_module.bias.shape[0]:
-            delta = delta[:linear_module.bias.shape[0]]
-
-        linear_module.bias.data = linear_module.bias.data + delta
+        """Attiva l'hook con un certo coefficiente."""
+        self.alpha = coefficient
+        if self.handle is None:
+            self.handle = self.module.register_forward_hook(self.hook_fn)
         
     def remove(self):
-        if hasattr(self, 'target_module'):
-            if self.original_bias is not None:
-                self.target_module.bias.data = self.original_bias
-            else:
-                self.target_module.bias = None
+        """Rimuove l'hook."""
+        if self.handle:
+            self.handle.remove()
+            self.handle = None
 
-# =========================================================================
-# 🏭 SEZIONE 4: DATASET EXTRACTOR (Automazione)
-# =========================================================================
+# ==========================================
+# 4. DATASET EXTRACTOR
+# ==========================================
 class DatasetExtractor:
     def __init__(self, model_wrapper, layer_idx=14):
         self.mg = model_wrapper
@@ -135,63 +129,53 @@ class DatasetExtractor:
         self.target_layer = self.mg.model.lm.transformer.layers[layer_idx]
         self.hook = ActivationHook(self.target_layer)
         
-    def extract(self, csv_path, save_path, sep=';'):
-        print(f"\n🏭 ESTRAZIONE DATASET (Layer {self.layer_idx}) -> {save_path}")
-        
-        try:
-            df = pd.read_csv(csv_path, sep=sep)
-        except Exception as e:
-            print(f"❌ Errore CSV: {e}")
-            return
+    def extract(self, csv_path, save_path, audio_output_dir=None, sep=';'):
+        print(f"🏭 Extracting from {csv_path}...")
+        try: df = pd.read_csv(csv_path, sep=sep)
+        except: print("❌ Error reading CSV"); return
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        
+        if audio_output_dir: os.makedirs(audio_output_dir, exist_ok=True)
+
         cumulative_vector = None
         count = 0
         self.hook.register()
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
             try:
-                # Gestione colonne flessibile
                 p_pos = str(row.get('positive_prompt', row.iloc[0])).strip()
                 p_neg = str(row.get('negative_prompt', row.iloc[1])).strip()
+                
+                # Nomi file (opzionali)
+                f_pos = os.path.join(audio_output_dir, f"{index}_pos") if audio_output_dir else None
+                f_neg = os.path.join(audio_output_dir, f"{index}_neg") if audio_output_dir else None
 
-                # Generazione silenziosa (non salviamo audio per velocità)
-                self.mg.model.generate([p_pos], progress=False)
+                self.mg.generate(p_pos, filename=f_pos)
                 vec_pos = self.hook.get_mean_vector()
                 self.hook.activations = []
 
-                self.mg.model.generate([p_neg], progress=False)
+                self.mg.generate(p_neg, filename=f_neg)
                 vec_neg = self.hook.get_mean_vector()
                 self.hook.activations = []
 
                 if vec_pos is not None and vec_neg is not None:
                     diff = vec_pos - vec_neg
-                    # Normalizzazione Locale (Cruciale!)
-                    diff = diff / (diff.norm() + 1e-8)
-
+                    diff = diff / (diff.norm() + 1e-8) # Normalizzazione Locale
                     if cumulative_vector is None: cumulative_vector = diff
                     else: cumulative_vector += diff
                     count += 1
-                
-            except Exception as e:
-                print(f"Errore riga {index}: {e}")
-                self.hook.activations = []
+            except Exception as e: print(f"Err row {index}: {e}")
 
         self.hook.remove()
-
         if cumulative_vector is not None:
-            # Media e Normalizzazione Finale
             mean_vector = cumulative_vector / count
-            mean_vector = mean_vector / mean_vector.norm()
+            mean_vector = mean_vector / mean_vector.norm() # Normalizzazione Finale
             torch.save(mean_vector, save_path)
-            print(f"✅ Salvato: {save_path} ({count} coppie)")
-        else:
-            print("❌ Nessun vettore estratto.")
+            print(f"✅ Saved vector: {save_path}")
 
-# =========================================================================
-# 🚀 SEZIONE 5: DATASET INFERENCE (Automazione)
-# =========================================================================
+# ==========================================
+# 5. DATASET INFERENCE (Aggiornata per Dynamic)
+# ==========================================
 class DatasetInference:
     def __init__(self, model_wrapper, layer_idx=14):
         self.mg = model_wrapper
@@ -199,46 +183,50 @@ class DatasetInference:
         self.target_layer = self.mg.model.lm.transformer.layers[layer_idx]
 
     def run(self, prompts_file, vector_path, output_dir, alpha=1.5, max_samples=None):
-        print(f"\n🚀 INFERENZA BATCH (Alpha {alpha})")
+        print(f"🚀 Batch Inference (Dynamic Alpha {alpha})...")
         
-        # Carica Vettore
         try:
             vec = torch.load(vector_path)
-            # Fix Shape [2, 1024] -> [1, 1024]
-            if vec.dim() == 2 and vec.shape[0] > 1:
-                vec = vec.mean(dim=0, keepdim=True)
+            if vec.dim() == 2 and vec.shape[0] > 1: vec = vec.mean(dim=0, keepdim=True)
             vec = vec / (vec.norm() + 1e-8)
-        except Exception as e:
-            print(f"❌ Errore vettore: {e}"); return
+        except: print("❌ Error loading vector"); return
 
-        # Carica Dataset
         try:
             df = pd.read_csv(prompts_file, sep=';')
             if max_samples: df = df.head(max_samples)
-        except: print("❌ Errore CSV prompt"); return
+        except: print("❌ Error reading CSV"); return
 
         os.makedirs(output_dir, exist_ok=True)
-        steerer = WeightSteering(self.target_layer, vec)
+        
+        # Usiamo DynamicSteering invece di WeightSteering
+        steerer = DynamicSteering(self.target_layer, vec)
 
         for i, row in tqdm(df.iterrows(), total=len(df)):
             try:
                 pid = str(row.get('ID', row.get('id', i))).strip()
-                prompt = str(row.get('test_prompt', row.get('prompt', row.iloc[-1]))).strip()
+                if 'test_prompt' in row: prompt = str(row['test_prompt']).strip()
+                elif 'prompt' in row: prompt = str(row['prompt']).strip()
+                else: prompt = str(row.iloc[-1]).strip()
                 
                 safe_p = "".join([c for c in prompt if c.isalnum() or c in " _-"])[:20].replace(" ", "_")
                 base = os.path.join(output_dir, f"{pid}_{safe_p}")
 
-                # Generazione
+                # Genera Originale
                 self.mg.generate(prompt, f"{base}_orig")
                 
+                # Genera Happy
                 steerer.apply(alpha)
                 self.mg.generate(prompt, f"{base}_pos")
                 steerer.remove()
                 
+                # Genera Sad (Alpha negativo per inversione)
+                # Attenzione: con la formula (1+alpha), usare alpha negativi può essere tricky
+                # se alpha è vicino a -1 (divisione per zero).
+                # La nostra classe usa abs(alpha) al denominatore, quindi è sicuro.
                 steerer.apply(-alpha)
                 self.mg.generate(prompt, f"{base}_neg")
                 steerer.remove()
                 
             except Exception as e:
-                print(f"Errore {pid}: {e}")
+                print(f"Error {pid}: {e}")
                 steerer.remove()
