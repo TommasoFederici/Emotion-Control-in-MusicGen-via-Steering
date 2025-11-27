@@ -1,1 +1,5 @@
 ** Vettore introduce troppo rumore, provare a ripulirlo o altri layer
+
+** controllare inversione del segno dopo PCA, capire se PCA funziona o no
+
+** provare altri layer
