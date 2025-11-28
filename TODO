@@ -5,3 +5,9 @@
 * provare altri layer
 
 * Pensare se semplificare il dataset
+
+######## FILE DA ELIMINARE (POI):
+# score_test_Happy_Sad_TRAIN.csv
+# score_test_Happy_Sad.csv
+# audio
+# clap_test_temp.py
