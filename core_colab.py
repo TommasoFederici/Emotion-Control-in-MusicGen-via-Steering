@@ -5,8 +5,6 @@ from tqdm import tqdm
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 import logging
-from sklearn.decomposition import PCA
-import numpy as np
 
 # Silenzia log di sistema
 logging.getLogger("audiocraft").setLevel(logging.ERROR)
@@ -121,9 +119,8 @@ class DynamicSteering:
             self.handle.remove()
             self.handle = None
 
-
 # ==========================================
-# 4. DATASET EXTRACTOR (Versione PCA)
+# 4. DATASET EXTRACTOR
 # ==========================================
 class DatasetExtractor:
     def __init__(self, model_wrapper, layer_idx=14):
@@ -132,17 +129,15 @@ class DatasetExtractor:
         self.target_layer = self.mg.model.lm.transformer.layers[layer_idx]
         self.hook = ActivationHook(self.target_layer)
         
-    def extract(self, csv_path, save_path, audio_output_dir=None, sep=';', use_pca=True):
-        print(f"🏭 Extracting from {csv_path} (PCA={use_pca})...")
-        
+    def extract(self, csv_path, save_path, audio_output_dir=None, sep=';'):
+        print(f"🏭 Extracting from {csv_path}...")
         try: df = pd.read_csv(csv_path, sep=sep)
         except: print("❌ Error reading CSV"); return
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if audio_output_dir: os.makedirs(audio_output_dir, exist_ok=True)
 
-        # Invece di accumulare la somma, salviamo TUTTE le differenze in una lista
-        all_differences = []
+        cumulative_vector = None
         count = 0
         self.hook.register()
 
@@ -151,11 +146,10 @@ class DatasetExtractor:
                 p_pos = str(row.get('positive_prompt', row.iloc[0])).strip()
                 p_neg = str(row.get('negative_prompt', row.iloc[1])).strip()
                 
-                # Nomi file audio (opzionali)
+                # Nomi file (opzionali)
                 f_pos = os.path.join(audio_output_dir, f"{index}_pos") if audio_output_dir else None
                 f_neg = os.path.join(audio_output_dir, f"{index}_neg") if audio_output_dir else None
 
-                # Generazione
                 self.mg.generate(p_pos, filename=f_pos)
                 vec_pos = self.hook.get_mean_vector()
                 self.hook.activations = []
@@ -165,51 +159,19 @@ class DatasetExtractor:
                 self.hook.activations = []
 
                 if vec_pos is not None and vec_neg is not None:
-                    # Calcola differenza grezza
                     diff = vec_pos - vec_neg
-                    
-                    # Salviamo nella lista per la PCA
-                    all_differences.append(diff.cpu()) # Portiamo su CPU per sklearn
+                    diff = diff / (diff.norm() + 1e-8) # Normalizzazione Locale
+                    if cumulative_vector is None: cumulative_vector = diff
+                    else: cumulative_vector += diff
                     count += 1
-            except Exception as e: print(f"Err {index}: {e}")
+            except Exception as e: print(f"Err row {index}: {e}")
 
         self.hook.remove()
-
-        if len(all_differences) > 0:
-            # Stack di tutti i vettori: [N_coppie, 1024]
-            X = torch.stack(all_differences).numpy()
-            
-            if use_pca and len(all_differences) > 1:
-                print("🧠 Calcolo PCA per pulire il rumore...")
-                # Calcoliamo la componente principale
-                pca = PCA(n_components=1)
-                pca.fit(X)
-                
-                # Questo è il vettore pulito [1024]
-                final_vector = torch.from_numpy(pca.components_[0]).float()
-                
-                # CHECK DIREZIONE: La PCA può invertire il segno a caso.
-                # Controlliamo se punta nella stessa direzione della media semplice.
-                mean_simple = torch.mean(torch.stack(all_differences), dim=0)
-                if torch.dot(final_vector, mean_simple) < 0:
-                    print("🔄 PCA ha invertito il segno. Correggo...")
-                    final_vector = -final_vector
-            else:
-                # Fallback sulla media semplice se PCA è disattivata o pochi dati
-                print("Using simple Mean.")
-                final_vector = torch.mean(torch.stack(all_differences), dim=0)
-
-            # Normalizzazione Finale e Shape Fix
-            final_vector = final_vector / (final_vector.norm() + 1e-8)
-            
-            # Assicuriamoci che sia [1, 1024] per l'inferenza
-            if final_vector.dim() == 1:
-                final_vector = final_vector.unsqueeze(0)
-
-            torch.save(final_vector, save_path)
-            print(f"✅ Saved vector: {save_path} | Shape: {final_vector.shape}")
-        else:
-            print("❌ Nessun vettore estratto.")
+        if cumulative_vector is not None:
+            mean_vector = cumulative_vector / count
+            mean_vector = mean_vector / mean_vector.norm() # Normalizzazione Finale
+            torch.save(mean_vector, save_path)
+            print(f"✅ Saved vector: {save_path}")
 
 # ==========================================
 # 5. DATASET INFERENCE (Aggiornata per Dynamic)
