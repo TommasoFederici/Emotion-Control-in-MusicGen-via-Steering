@@ -1,6 +1,6 @@
 import torch
 import os
-from core import MusicGenWrapper, WeightSteering
+from VECCHI_FILE.core import MusicGenWrapper, WeightSteering
 
 def run_micro_sweep():
     print("\n🔬 MICRO-SWEEP (Calibrazione di Precisione)")

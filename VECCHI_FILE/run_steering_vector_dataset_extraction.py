@@ -1,4 +1,4 @@
-from core import MusicGenWrapper, DatasetExtractor
+from VECCHI_FILE.core import MusicGenWrapper, DatasetExtractor
 
 def main():
     # 1. Configurazione
