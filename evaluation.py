@@ -5,11 +5,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 from transformers import pipeline
 
-######## FILE DA ELIMINARE (POI):
-# score_test_Happy_Sad_TRAIN.csv
-# score_test_Happy_Sad.csv
-# audio
-# clap_test_temp.py
+#come l'evaluation del core colab, ma questa è senza salvataggio dei png
 
 
 class Evaluation:
@@ -66,7 +62,7 @@ class Evaluation:
         except Exception as e:
             return 0.0
 
-    def _create_bar_chart(self, x_labels, values, title, y_limit=(-1.1, 1.1)):
+    def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
         plt.figure(figsize=(12, 6))
         cmap = plt.get_cmap('bwr')
         norm = mcolors.Normalize(vmin=-1, vmax=1) 
@@ -75,7 +71,14 @@ class Evaluation:
         bars = plt.bar(x_labels, values, color=bar_colors, edgecolor='black', width=0.6)
         plt.axhline(0, color='black', linewidth=1.5)
         plt.ylim(y_limit[0], y_limit[1])
+        
         plt.title(title, fontsize=16)
+        
+        # --- MODIFICA RICHIESTA: LABELS ASSI ---
+        plt.xlabel("Tracks ID", fontsize=12) # Fisso come richiesto
+        plt.ylabel(y_label, fontsize=12)     # Parametrico come richiesto
+        # ---------------------------------------
+
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         plt.xticks(rotation=45)
 
@@ -91,16 +94,17 @@ class Evaluation:
         plt.show()
 
     # --- PLOTTING FUNCTIONS ---
-    def plot_neutral(self, num_samples=20):
-        self._run_single_plot(num_samples, "_orig.wav", "Neutral Analysis")
+    # Ora accettano tutte y_label
+    def plot_neutral(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_orig.wav", "Neutral Analysis", y_label)
 
-    def plot_positive(self, num_samples=20):
-        self._run_single_plot(num_samples, "_pos.wav", "Positive Analysis")
+    def plot_positive(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_pos.wav", "Positive Analysis", y_label)
 
-    def plot_negative(self, num_samples=20):
-        self._run_single_plot(num_samples, "_neg.wav", "Negative Analysis")
+    def plot_negative(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_neg.wav", "Negative Analysis", y_label)
 
-    def _run_single_plot(self, num_samples, suffix, title):
+    def _run_single_plot(self, num_samples, suffix, title, y_label):
         scores, labels = [], []
         for audio_id in self.ids[:num_samples]:
             path = os.path.join(self.audio_folder, f"{audio_id}{suffix}")
@@ -108,16 +112,17 @@ class Evaluation:
                 scores.append(self._get_valence_score(path))
             else:
                 scores.append(0)
-            labels.append(f"ID_{audio_id}")
-        self._create_bar_chart(labels, scores, title)
+            labels.append(audio_id)
+        # Passiamo y_label a create_bar_chart
+        self._create_bar_chart(labels, scores, title, y_label)
 
-    def plot_delta_positive(self, num_samples=20):
-        self._run_delta_plot(num_samples, "_pos.wav", "Delta Positive (Pos - Orig)")
+    def plot_delta_positive(self, num_samples=20, y_label="Score"):
+        self._run_delta_plot(num_samples, "_pos.wav", "Delta Positive (Pos - Orig)", y_label)
 
-    def plot_delta_negative(self, num_samples=20):
-        self._run_delta_plot(num_samples, "_neg.wav", "Delta Negative (Neg - Orig)")
+    def plot_delta_negative(self, num_samples=20, y_label="Score"):
+        self._run_delta_plot(num_samples, "_neg.wav", "Delta Negative (Neg - Orig)", y_label)
 
-    def _run_delta_plot(self, num_samples, target_suffix, title):
+    def _run_delta_plot(self, num_samples, target_suffix, title, y_label):
         deltas, labels = [], []
         for audio_id in self.ids[:num_samples]:
             path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
@@ -129,9 +134,10 @@ class Evaluation:
                 deltas.append(s_target - s_orig)
             else:
                 deltas.append(0)
-            labels.append(f"ID_{audio_id}")
+            labels.append(audio_id)
         
-        self._create_bar_chart(labels, deltas, title, y_limit=(-2.0, 2.0))
+        # Passiamo y_label a create_bar_chart
+        self._create_bar_chart(labels, deltas, title, y_label, y_limit=(-2.0, 2.0))
 
     # --- SALVATAGGIO CSV ---
     def save_to_csv(self):
@@ -202,29 +208,29 @@ class Evaluation:
             print(f"Errore nel salvare il CSV: {e}")
 
     # --- FUNZIONE ORCHESTRATORE ---
-    def evaluate(self, num_samples_plot=20):
+    def evaluate(self, num_samples_plot=20, y_label="Score"):
         if self.train_mode:
             print("\n>>> TRAIN MODE <<<")
-            self.plot_positive(num_samples_plot)
-            self.plot_negative(num_samples_plot)
+            self.plot_positive(num_samples_plot, y_label=y_label)
+            self.plot_negative(num_samples_plot, y_label=y_label)
         else:
             print("\n>>> FULL MODE <<<")
-            self.plot_neutral(num_samples_plot)
-            self.plot_positive(num_samples_plot)
-            self.plot_negative(num_samples_plot)
-            self.plot_delta_positive(num_samples_plot)
-            self.plot_delta_negative(num_samples_plot)
+            self.plot_neutral(num_samples_plot, y_label=y_label)
+            self.plot_positive(num_samples_plot, y_label=y_label)
+            self.plot_negative(num_samples_plot, y_label=y_label)
+            self.plot_delta_positive(num_samples_plot, y_label=y_label)
+            self.plot_delta_negative(num_samples_plot, y_label=y_label)
         self.save_to_csv()
 
     @classmethod
-    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20):
+    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20, y_label="Score"):
         evaluator = cls(audio_folder, output_dir, csv_filename, train_mode)
-        evaluator.evaluate(num_samples_plot=num_samples)
+        evaluator.evaluate(num_samples_plot=num_samples, y_label=y_label)
         return evaluator
 
 # --- UTILIZZO SEMPLIFICATO ---
 if __name__ == "__main__":
-    
+                                  
     Evaluation.run(
         audio_folder="data/Happy_Sad/audio",
         output_dir="data/Happy_Sad", 
@@ -232,5 +238,6 @@ if __name__ == "__main__":
         train_mode=True,  
         #label_pos="calm mood",
         #label_neg="angry mood",
-        num_samples=20
+        num_samples=20,
+        y_label="Valence Score"  
     )

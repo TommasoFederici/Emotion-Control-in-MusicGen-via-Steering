@@ -297,7 +297,7 @@ class Evaluation:
         except Exception as e:
             return 0.0
 
-    def _create_bar_chart(self, x_labels, values, title, y_limit=(-1.1, 1.1)):
+    def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
         plt.figure(figsize=(12, 6))
         cmap = plt.get_cmap('bwr')
         norm = mcolors.Normalize(vmin=-1, vmax=1) 
@@ -306,7 +306,14 @@ class Evaluation:
         bars = plt.bar(x_labels, values, color=bar_colors, edgecolor='black', width=0.6)
         plt.axhline(0, color='black', linewidth=1.5)
         plt.ylim(y_limit[0], y_limit[1])
+        
         plt.title(title, fontsize=16)
+        
+        # --- MODIFICA RICHIESTA: LABELS ASSI ---
+        plt.xlabel("Tracks ID", fontsize=12)  # Fisso
+        plt.ylabel(y_label, fontsize=12)      # Parametrico
+        # ---------------------------------------
+
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         plt.xticks(rotation=45)
 
@@ -320,12 +327,11 @@ class Evaluation:
 
         plt.tight_layout()
         
-        # --- MODIFICA: SALVATAGGIO GRAFICO ---
+        # --- SALVATAGGIO GRAFICO ---
         if self.output_dir:
-            # Crea nome file sicuro dal titolo (es. "Delta Positive" -> "plot_delta_positive.png")
+            # Crea nome file sicuro dal titolo
             safe_name = title.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "")
             save_path = os.path.join(self.output_dir, f"plot_{safe_name}.png")
-            # Crea cartella se non esiste
             os.makedirs(self.output_dir, exist_ok=True)
             plt.savefig(save_path, dpi=300)
             print(f"📊 Grafico salvato: {save_path}")
@@ -334,16 +340,18 @@ class Evaluation:
         plt.close()
 
     # --- PLOTTING FUNCTIONS ---
-    def plot_neutral(self, num_samples=20):
-        self._run_single_plot(num_samples, "_orig.wav", "Neutral Analysis")
+    # Tutte le funzioni ora accettano y_label e la passano avanti
+    
+    def plot_neutral(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_orig.wav", "Neutral Analysis", y_label)
 
-    def plot_positive(self, num_samples=20):
-        self._run_single_plot(num_samples, "_pos.wav", "Positive Analysis")
+    def plot_positive(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_pos.wav", "Positive Analysis", y_label)
 
-    def plot_negative(self, num_samples=20):
-        self._run_single_plot(num_samples, "_neg.wav", "Negative Analysis")
+    def plot_negative(self, num_samples=20, y_label="Score"):
+        self._run_single_plot(num_samples, "_neg.wav", "Negative Analysis", y_label)
 
-    def _run_single_plot(self, num_samples, suffix, title):
+    def _run_single_plot(self, num_samples, suffix, title, y_label):
         scores, labels = [], []
         for audio_id in self.ids[:num_samples]:
             path = os.path.join(self.audio_folder, f"{audio_id}{suffix}")
@@ -351,16 +359,17 @@ class Evaluation:
                 scores.append(self._get_valence_score(path))
             else:
                 scores.append(0)
-            labels.append(f"ID_{audio_id}")
-        self._create_bar_chart(labels, scores, title)
+            labels.append(audio_id)
+        # Passiamo y_label
+        self._create_bar_chart(labels, scores, title, y_label)
 
-    def plot_delta_positive(self, num_samples=20):
-        self._run_delta_plot(num_samples, "_pos.wav", "Delta Positive (Pos - Orig)")
+    def plot_delta_positive(self, num_samples=20, y_label="Score"):
+        self._run_delta_plot(num_samples, "_pos.wav", "Delta Positive (Pos - Orig)", y_label)
 
-    def plot_delta_negative(self, num_samples=20):
-        self._run_delta_plot(num_samples, "_neg.wav", "Delta Negative (Neg - Orig)")
+    def plot_delta_negative(self, num_samples=20, y_label="Score"):
+        self._run_delta_plot(num_samples, "_neg.wav", "Delta Negative (Neg - Orig)", y_label)
 
-    def _run_delta_plot(self, num_samples, target_suffix, title):
+    def _run_delta_plot(self, num_samples, target_suffix, title, y_label):
         deltas, labels = [], []
         for audio_id in self.ids[:num_samples]:
             path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
@@ -372,16 +381,14 @@ class Evaluation:
                 deltas.append(s_target - s_orig)
             else:
                 deltas.append(0)
-            labels.append(f"ID_{audio_id}")
+            labels.append(audio_id)
         
-        self._create_bar_chart(labels, deltas, title, y_limit=(-2.0, 2.0))
+        # Passiamo y_label
+        self._create_bar_chart(labels, deltas, title, y_label, y_limit=(-2.0, 2.0))
 
     # --- SALVATAGGIO CSV ---
     def save_to_csv(self):
-        """
-        Salva il CSV in base alla modalità (TRAIN o FULL).
-        """
-        # Assicura che la cartella di output esista
+        """Salva il CSV in base alla modalità (TRAIN o FULL)."""
         os.makedirs(self.output_dir, exist_ok=True)
         full_path = os.path.join(self.output_dir, self.csv_filename)
 
@@ -391,23 +398,19 @@ class Evaluation:
         data = []
 
         for i, audio_id in enumerate(self.ids):
-            # Percorsi comuni
             path_pos = os.path.join(self.audio_folder, f"{audio_id}_pos.wav")
             path_neg = os.path.join(self.audio_folder, f"{audio_id}_neg.wav")
             
-            # Calcolo score Pos/Neg
             s_pos = self._get_valence_score(path_pos) if os.path.exists(path_pos) else 0.0
             s_neg = self._get_valence_score(path_neg) if os.path.exists(path_neg) else 0.0
 
             if self.train_mode:
-                # MODALITA' TRAIN: Solo Pos e Neg
                 data.append({
                     "id": audio_id,
                     "score_pos": round(s_pos, 4),
                     "score_neg": round(s_neg, 4)
                 })
             else:
-                # MODALITA' DEFAULT: Anche Orig e Delta
                 path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
                 s_neutral = self._get_valence_score(path_orig) if os.path.exists(path_orig) else 0.0
                 
@@ -426,10 +429,8 @@ class Evaluation:
             if i % 5 == 0:
                 print(f"Processati {i}/{len(self.ids)} file...")
 
-        # Creazione DataFrame
         df = pd.DataFrame(data)
         
-        # Ordinamento colonne
         if self.train_mode:
             cols = ["id", "score_pos", "score_neg"]
         else:
@@ -445,22 +446,34 @@ class Evaluation:
             print(f"Errore nel salvare il CSV: {e}")
 
     # --- FUNZIONE ORCHESTRATORE ---
-    def evaluate(self, num_samples_plot=20):
+    def evaluate(self, num_samples_plot=20, y_label="Score"):
         if self.train_mode:
             print("\n>>> TRAIN MODE <<<")
-            self.plot_positive(num_samples_plot)
-            self.plot_negative(num_samples_plot)
+            self.plot_positive(num_samples_plot, y_label=y_label)
+            self.plot_negative(num_samples_plot, y_label=y_label)
         else:
             print("\n>>> FULL MODE <<<")
-            self.plot_neutral(num_samples_plot)
-            self.plot_positive(num_samples_plot)
-            self.plot_negative(num_samples_plot)
-            self.plot_delta_positive(num_samples_plot)
-            self.plot_delta_negative(num_samples_plot)
+            self.plot_neutral(num_samples_plot, y_label=y_label)
+            self.plot_positive(num_samples_plot, y_label=y_label)
+            self.plot_negative(num_samples_plot, y_label=y_label)
+            self.plot_delta_positive(num_samples_plot, y_label=y_label)
+            self.plot_delta_negative(num_samples_plot, y_label=y_label)
         self.save_to_csv()
 
     @classmethod
-    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20):
+    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20, y_label="Score"):
         evaluator = cls(audio_folder, output_dir, csv_filename, train_mode)
-        evaluator.evaluate(num_samples_plot=num_samples)
+        evaluator.evaluate(num_samples_plot=num_samples, y_label=y_label)
         return evaluator
+
+
+if __name__ == "__main__":
+                                         
+    Evaluation.run(
+        audio_folder="data/Happy_Sad/audio",
+        output_dir="data/Happy_Sad", 
+        csv_filename="score_test_Happy_Sad_TRAIN.csv",
+        train_mode=True,  
+        num_samples=20,
+        y_label="Happyness Score"
+    )
