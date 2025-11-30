@@ -1,10 +1,8 @@
-* Vettore introduce troppo rumore, provare a ripulirlo o altri layer
+# Creare un dataset di estrazione con solo pianoforte, 20/30 coppie massimo (andrei di 20)
 
-* controllare inversione del segno dopo PCA, capire se PCA funziona o no
+# Cercare di rendere il test più neutro possibile
 
-* provare altri layer
-
-* Pensare se semplificare il dataset
+# Vedere se tenere le nuove metriche o meno (guardare dopo i risultati della nuova estrazione)
 
 ######## FILE DA ELIMINARE (POI):
 # score_test_Happy_Sad_TRAIN.csv

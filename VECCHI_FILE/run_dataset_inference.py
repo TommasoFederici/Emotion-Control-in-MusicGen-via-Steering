@@ -1,4 +1,4 @@
-from core import MusicGenWrapper, DatasetInference
+from VECCHI_FILE.core import MusicGenWrapper, DatasetInference
 
 def main():
     # --- CONFIGURAZIONE ---
