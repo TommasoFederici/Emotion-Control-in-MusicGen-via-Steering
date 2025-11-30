@@ -183,9 +183,9 @@ class Evaluation:
         
         self._create_bar_chart(labels, deltas, title, y_label, y_limit=(-2.0, 2.0))
 
-    # --- SALVATAGGIO CSV (CON FEATURES) ---
+    # --- SALVATAGGIO CSV (CON AVG) ---
     def save_to_csv(self):
-        """Salva il CSV includendo le nuove metriche fisiche (Centroid, RMS, Tempo)."""
+        """Salva il CSV includendo metriche fisiche e riga AVG finale."""
         os.makedirs(self.output_dir, exist_ok=True)
         full_path = os.path.join(self.output_dir, self.csv_filename)
 
@@ -194,14 +194,13 @@ class Evaluation:
         data = []
 
         for i, audio_id in enumerate(self.ids):
+            # ... (Il codice di estrazione rimane uguale) ...
             path_pos = os.path.join(self.audio_folder, f"{audio_id}_pos.wav")
             path_neg = os.path.join(self.audio_folder, f"{audio_id}_neg.wav")
             
-            # Score AI (CLAP)
             s_pos = self._get_valence_score(path_pos) if os.path.exists(path_pos) else 0.0
             s_neg = self._get_valence_score(path_neg) if os.path.exists(path_neg) else 0.0
 
-            # Metriche Fisiche (Librosa)
             feat_pos = self.extract_acoustic_features(path_pos)
             feat_neg = self.extract_acoustic_features(path_neg)
 
@@ -220,35 +219,49 @@ class Evaluation:
                 s_neutral = self._get_valence_score(path_orig) if os.path.exists(path_orig) else 0.0
                 feat_orig = self.extract_acoustic_features(path_orig)
                 
-                d_pos = s_pos - s_neutral
-                d_neg = s_neg - s_neutral
-
                 data.append({
                     "id": audio_id,
                     "score_neutral": round(s_neutral, 4),
                     "score_pos": round(s_pos, 4),
                     "score_neg": round(s_neg, 4),
-                    "delta_pos": round(d_pos, 4),
-                    "delta_neg": round(d_neg, 4),
+                    "delta_pos": round(s_pos - s_neutral, 4),
+                    "delta_neg": round(s_neg - s_neutral, 4),
                     "orig_centroid": feat_orig['centroid'],
                     "pos_centroid": feat_pos['centroid'],
                     "neg_centroid": feat_neg['centroid'],
                     "orig_rms": feat_orig['rms'],
                     "pos_rms": feat_pos['rms'],
                     "neg_rms": feat_neg['rms'],
-                    "orig_bpm": feat_orig['tempo'],
-                    "pos_bpm": feat_pos['tempo']
+                    # BPM opzionale se serve
+                    # "orig_bpm": feat_orig['tempo'],
+                    # "pos_bpm": feat_pos['tempo']
                 })
 
             if i % 5 == 0:
                 print(f"Processati {i}/{len(self.ids)} file...")
 
+        # Creazione DataFrame
         df = pd.DataFrame(data)
+        
+        # --- CALCOLO RIGA AVG ---
+        # Calcoliamo la media solo sulle colonne numeriche (escludendo 'id' se non è indice)
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if 'id' in numeric_cols: numeric_cols.remove('id')
+        
+        # Creiamo un dizionario per la riga AVG
+        avg_row = {col: round(df[col].mean(), 4) for col in numeric_cols}
+        avg_row['id'] = "AVG" # Etichetta speciale
+        
+        # Aggiungiamo la riga al DataFrame
+        # (Usa pd.concat per essere compatibile con le nuove versioni di pandas)
+        df_avg = pd.DataFrame([avg_row])
+        df = pd.concat([df, df_avg], ignore_index=True)
         
         try:
             df.to_csv(full_path, sep=';', index=False)
             print(f"\nCOMPLETATO. File salvato in: {full_path}")
-            print(df.head()) 
+            print("Ultime righe (inclusa AVG):")
+            print(df.tail()) 
         except Exception as e:
             print(f"Errore nel salvare il CSV: {e}")
 
