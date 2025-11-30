@@ -268,8 +268,8 @@ class Evaluation:
         self.save_to_csv()
 
     @classmethod
-    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20, y_label="Score"):
-        evaluator = cls(audio_folder, output_dir, csv_filename, train_mode)
+    def run(cls, audio_folder, output_dir, csv_filename, train_mode=False, num_samples=20, y_label="Score", label_pos="happy mood", label_neg="sad mood"):
+        evaluator = cls(audio_folder, output_dir, csv_filename, train_mode, label_pos, label_neg)
         evaluator.evaluate(num_samples_plot=num_samples, y_label=y_label)
         return evaluator
 
