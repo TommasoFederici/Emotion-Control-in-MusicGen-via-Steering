@@ -547,14 +547,3 @@ class Evaluation:
         evaluator.evaluate(num_samples_plot=num_samples, y_label=y_label)
         return evaluator
 
-
-if __name__ == "__main__":
-                                         
-    Evaluation.run(
-        audio_folder="data/Happy_Sad/audio",
-        output_dir="data/Happy_Sad", 
-        csv_filename="score_test_Happy_Sad_TRAIN.csv",
-        train_mode=True,  
-        num_samples=20,
-        y_label="Happyness Score"
-    )
