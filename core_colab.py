@@ -228,111 +228,111 @@ class DatasetExtractor:
         else:
             print("❌ Nessun vettore estratto (count=0).")
 
-        def extract_via_pca(self, csv_path, save_path, audio_output_dir=None, sep=';'):
-            print(f"🏭 Multi-Extraction PCA {self.target_layers_indices} -> {save_path}")
-            
-            try: df = pd.read_csv(csv_path, sep=sep)
-            except: print("❌ Error reading CSV"); return
+    def extract_via_pca(self, csv_path, save_path, audio_output_dir=None, sep=';'):
+        print(f"🏭 Multi-Extraction PCA {self.target_layers_indices} -> {save_path}")
+        
+        try: df = pd.read_csv(csv_path, sep=sep)
+        except: print("❌ Error reading CSV"); return
 
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            if audio_output_dir: os.makedirs(audio_output_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        if audio_output_dir: os.makedirs(audio_output_dir, exist_ok=True)
 
-            # MODIFICA 1: Accumulatori come LISTE, non come somme
-            # layer_vectors = {14: [tensor1, tensor2...], 15: [...]}
-            layer_vectors = {idx: [] for idx in self.target_layers_indices}
-            count = 0
+        # MODIFICA 1: Accumulatori come LISTE, non come somme
+        # layer_vectors = {14: [tensor1, tensor2...], 15: [...]}
+        layer_vectors = {idx: [] for idx in self.target_layers_indices}
+        count = 0
 
-            # Attiva tutti gli hook
-            for h in self.hooks.values(): h.register()
+        # Attiva tutti gli hook
+        for h in self.hooks.values(): h.register()
 
-            for index, row in tqdm(df.iterrows(), total=len(df)):
-                try:
-                    p_pos = str(row.get('positive_prompt', row.iloc[0])).strip()
-                    p_neg = str(row.get('negative_prompt', row.iloc[1])).strip()
-                    pid = str(row.get('ID', index)).strip()
+        for index, row in tqdm(df.iterrows(), total=len(df)):
+            try:
+                p_pos = str(row.get('positive_prompt', row.iloc[0])).strip()
+                p_neg = str(row.get('negative_prompt', row.iloc[1])).strip()
+                pid = str(row.get('ID', index)).strip()
 
-                    # --- GENERA POSITIVE ---
-                    f_pos = os.path.join(audio_output_dir, f"{pid}_pos") if audio_output_dir else None
-                    self.mg.generate(p_pos, filename=f_pos)
-                    vecs_pos = {idx: h.get_mean_vector() for idx, h in self.hooks.items()}
-                    for h in self.hooks.values(): h.activations = [] 
+                # --- GENERA POSITIVE ---
+                f_pos = os.path.join(audio_output_dir, f"{pid}_pos") if audio_output_dir else None
+                self.mg.generate(p_pos, filename=f_pos)
+                vecs_pos = {idx: h.get_mean_vector() for idx, h in self.hooks.items()}
+                for h in self.hooks.values(): h.activations = [] 
 
-                    # --- GENERA NEGATIVE ---
-                    f_neg = os.path.join(audio_output_dir, f"{pid}_neg") if audio_output_dir else None
-                    self.mg.generate(p_neg, filename=f_neg)
-                    vecs_neg = {idx: h.get_mean_vector() for idx, h in self.hooks.items()}
-                    for h in self.hooks.values(): h.activations = [] 
+                # --- GENERA NEGATIVE ---
+                f_neg = os.path.join(audio_output_dir, f"{pid}_neg") if audio_output_dir else None
+                self.mg.generate(p_neg, filename=f_neg)
+                vecs_neg = {idx: h.get_mean_vector() for idx, h in self.hooks.items()}
+                for h in self.hooks.values(): h.activations = [] 
 
-                    # --- CALCOLA DIFFERENZE E ACCUMULA ---
-                    valid_pair = True
-                    current_diffs = {}
-                    
-                    for idx in self.target_layers_indices:
-                        v_p = vecs_pos[idx]
-                        v_n = vecs_neg[idx]
-                        if v_p is None or v_n is None: 
-                            valid_pair = False; break
-                        
-                        diff = v_p - v_n
-                        # Normalizzazione Locale
-                        diff = diff / (diff.norm() + 1e-8)
-                        current_diffs[idx] = diff
-
-                    if valid_pair:
-                        for idx, diff in current_diffs.items():
-                            # MODIFICA 2: Appendiamo alla lista invece di sommare
-                            # Spostiamo su CPU per risparmiare VRAM durante l'accumulo
-                            layer_vectors[idx].append(diff.cpu())
-                        count += 1
-
-                except Exception as e: print(f"Err {index}: {e}")
-
-            # Rimuovi hook
-            for h in self.hooks.values(): h.remove()
-
-            # --- CALCOLO VETTORE FINALE CON PCA ---
-            final_vectors_dict = {}
-            
-            if count > 0:
-                print(f"🧮 Calcolo PCA su {count} coppie...")
+                # --- CALCOLA DIFFERENZE E ACCUMULA ---
+                valid_pair = True
+                current_diffs = {}
                 
-                for idx, vec_list in layer_vectors.items():
-                    if not vec_list: continue
+                for idx in self.target_layers_indices:
+                    v_p = vecs_pos[idx]
+                    v_n = vecs_neg[idx]
+                    if v_p is None or v_n is None: 
+                        valid_pair = False; break
                     
-                    # 1. Creiamo la matrice [N_samples, Hidden_Dim] (es. 20x1024)
-                    matrix = torch.stack(vec_list).numpy()
-                    
-                    # 2. Applichiamo PCA per trovare la componente principale
-                    pca = PCA(n_components=1)
-                    pca.fit(matrix)
-                    
-                    # Il vettore "puro" è la prima componente
-                    comp_vec = torch.tensor(pca.components_[0], dtype=torch.float32)
-                    
-                    # 3. CONTROLLO DIREZIONE (Cruciale)
-                    # La PCA può restituire il vettore invertito (negativo).
-                    # Calcoliamo la media semplice per capire la direzione generale "Pos - Neg"
-                    mean_vec = torch.mean(torch.stack(vec_list), dim=0)
-                    
-                    # Se il prodotto scalare è negativo, la PCA punta dalla parte opposta -> invertiamo
-                    if torch.dot(comp_vec, mean_vec) < 0:
-                        comp_vec = -comp_vec
-                    
-                    # 4. Normalizzazione Finale
-                    comp_vec = comp_vec / (comp_vec.norm() + 1e-8)
-                    if comp_vec.dim() == 1: comp_vec = comp_vec.unsqueeze(0)
-                    
-                    final_vectors_dict[idx] = comp_vec
-                    
-                    # Info Debug: Se Explained Variance è bassa (<0.2), il vettore è molto rumoroso
-                    print(f"   Layer {idx}: Variance Explained = {pca.explained_variance_ratio_[0]:.4f}")
+                    diff = v_p - v_n
+                    # Normalizzazione Locale
+                    diff = diff / (diff.norm() + 1e-8)
+                    current_diffs[idx] = diff
 
-                # Salviamo il dizionario
-                torch.save(final_vectors_dict, save_path)
-                print(f"✅ Multi-Layer PCA Vector salvato: {save_path}")
-                print(f"   Contiene layer: {list(final_vectors_dict.keys())}")
-            else:
-                print("❌ Nessun vettore estratto (count=0).")
+                if valid_pair:
+                    for idx, diff in current_diffs.items():
+                        # MODIFICA 2: Appendiamo alla lista invece di sommare
+                        # Spostiamo su CPU per risparmiare VRAM durante l'accumulo
+                        layer_vectors[idx].append(diff.cpu())
+                    count += 1
+
+            except Exception as e: print(f"Err {index}: {e}")
+
+        # Rimuovi hook
+        for h in self.hooks.values(): h.remove()
+
+        # --- CALCOLO VETTORE FINALE CON PCA ---
+        final_vectors_dict = {}
+        
+        if count > 0:
+            print(f"🧮 Calcolo PCA su {count} coppie...")
+            
+            for idx, vec_list in layer_vectors.items():
+                if not vec_list: continue
+                
+                # 1. Creiamo la matrice [N_samples, Hidden_Dim] (es. 20x1024)
+                matrix = torch.stack(vec_list).numpy()
+                
+                # 2. Applichiamo PCA per trovare la componente principale
+                pca = PCA(n_components=1)
+                pca.fit(matrix)
+                
+                # Il vettore "puro" è la prima componente
+                comp_vec = torch.tensor(pca.components_[0], dtype=torch.float32)
+                
+                # 3. CONTROLLO DIREZIONE (Cruciale)
+                # La PCA può restituire il vettore invertito (negativo).
+                # Calcoliamo la media semplice per capire la direzione generale "Pos - Neg"
+                mean_vec = torch.mean(torch.stack(vec_list), dim=0)
+                
+                # Se il prodotto scalare è negativo, la PCA punta dalla parte opposta -> invertiamo
+                if torch.dot(comp_vec, mean_vec) < 0:
+                    comp_vec = -comp_vec
+                
+                # 4. Normalizzazione Finale
+                comp_vec = comp_vec / (comp_vec.norm() + 1e-8)
+                if comp_vec.dim() == 1: comp_vec = comp_vec.unsqueeze(0)
+                
+                final_vectors_dict[idx] = comp_vec
+                
+                # Info Debug: Se Explained Variance è bassa (<0.2), il vettore è molto rumoroso
+                print(f"   Layer {idx}: Variance Explained = {pca.explained_variance_ratio_[0]:.4f}")
+
+            # Salviamo il dizionario
+            torch.save(final_vectors_dict, save_path)
+            print(f"✅ Multi-Layer PCA Vector salvato: {save_path}")
+            print(f"   Contiene layer: {list(final_vectors_dict.keys())}")
+        else:
+            print("❌ Nessun vettore estratto (count=0).")
 
 # ==========================================
 # 5. DATASET INFERENCE (multi-layer)
