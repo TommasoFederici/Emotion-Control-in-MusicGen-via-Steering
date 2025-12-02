@@ -1,0 +1,6 @@
+ID;positive_prompt;negative_prompt;
+1;A solo piano melody, exhibiting a happy, cheerful and bright mood;A solo piano melody, exhibiting a sad, depressive and dark mood;
+2;A piano solo piece, with cheerful and bright character;A piano solo piece, with depressive and dark character;
+3;A bright, happy and energetic grand piano concerto intro;A dark, sad and energetic grand piano concerto intro;
+4;An ambient piano progression, with a cheerful, bright feeling;An ambient piano progression, with a depressive, dark feeling;
+5;A happy, cheerful classical piano sonata;A sad, depressive classical piano sonata;
