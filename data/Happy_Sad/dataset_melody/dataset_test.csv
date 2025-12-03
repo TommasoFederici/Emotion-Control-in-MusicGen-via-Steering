@@ -1,0 +1,21 @@
+ID;test_prompt;melody_path
+1;A solo piano melody;data/melodies/test/test_01_random.wav
+2;An acoustic guitar recording;data/melodies/test/test_02_deep_bass.wav
+3;A violin melody;data/melodies/test/test_03_high_ping.wav
+4;A flute solo;data/melodies/test/test_04_staccato.wav
+5;A piano chord progression;data/melodies/test/test_05_gapped.wav
+6;An acoustic guitar strumming;data/melodies/test/test_01_random.wav
+7;A violin legato phrase;data/melodies/test/test_02_deep_bass.wav
+8;A flute melody;data/melodies/test/test_03_high_ping.wav
+9;A grand piano improvisation;data/melodies/test/test_04_staccato.wav
+10;A classical guitar piece;data/melodies/test/test_05_gapped.wav
+11;A jazz piano solo;data/melodies/test/test_01_random.wav
+12;A country guitar accompaniment;data/melodies/test/test_02_deep_bass.wav
+13;A dramatic violin soundtrack;data/melodies/test/test_03_high_ping.wav
+14;A folk flute tune;data/melodies/test/test_04_staccato.wav
+15;A blues acoustic guitar riff;data/melodies/test/test_05_gapped.wav
+16;A synthesizer melody;data/melodies/test/test_01_random.wav
+17;A saxophone jazz solo;data/melodies/test/test_02_deep_bass.wav
+18;A heavy metal electric guitar riff;data/melodies/test/test_03_high_ping.wav
+19;A techno bassline;data/melodies/test/test_04_staccato.wav
+20;An orchestral ensemble;data/melodies/test/test_05_gapped.wav
