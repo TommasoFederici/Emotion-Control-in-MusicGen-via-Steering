@@ -1,4 +1,4 @@
-ID;positive_prompt;negative_prompt;;melody_path
+ID;positive_prompt;negative_prompt;melody_path
 1;A solo piano melody, exhibiting a happy, cheerful and bright mood;A solo piano melody, exhibiting a sad, depressive and dark mood;data/melodies/extraction/01_scale_major.wav
 2;A piano solo piece, with cheerful and bright character;A piano solo piece, with depressive and dark character;data/melodies/extraction/02_arpeggio_slow.wav
 3;A bright, happy and energetic grand piano concerto intro;A dark, sad and energetic grand piano concerto intro;data/melodies/extraction/03_pulse_rhythm.wav
