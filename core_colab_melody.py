@@ -11,6 +11,7 @@ from audiocraft.data.audio import audio_write
 import logging
 from sklearn.decomposition import PCA
 import numpy as np
+from sklearn.metrics import silhouette_score
 
 # Silenzia log di sistema
 logging.getLogger("audiocraft").setLevel(logging.ERROR)
@@ -106,7 +107,7 @@ class ActivationHook:
         return full.mean(dim=1).squeeze()
 
 # ==========================================
-# 3. DYNAMIC STEERING (Identico)
+# 3. DYNAMIC STEERING
 # ==========================================
 class DynamicSteering:
     def __init__(self, module, steering_vector):
@@ -242,25 +243,54 @@ class DatasetInference:
         self.default_layers = layers if isinstance(layers, list) else [layers] if layers else [14]
 
     def run(self, prompts_file, vector_path, output_dir, alpha=1.5, max_samples=None):
-        print(f"🚀 Multi-Layer Inference (Alpha {alpha})...")
+        """
+        alpha: può essere un float (es. 1.5) oppure un dict (es. {'low': 1.0, 'high': 2.5})
+        """
+        print(f"🚀 Multi-Layer Inference (Alpha Config: {alpha})...")
         
         steerers = []
         try:
             data = torch.load(vector_path)
+            
+            # --- LOGICA 1: CARICAMENTO E ASSEGNAZIONE ALPHA ---
             if isinstance(data, dict):
                 print(f"📦 Multi-Layer: {list(data.keys())}")
                 for idx, vec in data.items():
                     target = self.mg.model.lm.transformer.layers[idx]
                     vec = vec / (vec.norm() + 1e-8)
                     if vec.dim() == 2 and vec.shape[0] > 1: vec = vec.mean(dim=0, keepdim=True)
-                    steerers.append(DynamicSteering(target, vec))
+                    
+                    # Calcolo Alpha specifico per questo layer
+                    current_alpha = 0.1 # Default
+                    if isinstance(alpha, (int, float)):
+                        current_alpha = float(alpha)
+                    elif isinstance(alpha, dict):
+                        # Logica Hybrid Steering
+                        if idx <= 18: # Blocco Basso
+                            current_alpha = alpha.get('low', 0.1)
+                        elif idx >= 19: # Blocco Alto
+                            current_alpha = alpha.get('high', 0.05)
+                        else:
+                            current_alpha = 0.1
+                    
+                    # Creo lo steerer e gli "incollo" il suo alpha target
+                    s = DynamicSteering(target, vec)
+                    s.target_alpha = current_alpha 
+                    steerers.append(s)
+            
             else:
+                # Fallback Single Layer
                 print(f"📦 Single-Layer: {self.default_layers}")
                 vec = data
                 vec = vec / (vec.norm() + 1e-8)
+                current_alpha = float(alpha) if isinstance(alpha, (int, float)) else 0.1
+                
                 for idx in self.default_layers:
                     target = self.mg.model.lm.transformer.layers[idx]
-                    steerers.append(DynamicSteering(target, vec))
+                    s = DynamicSteering(target, vec)
+                    s.target_alpha = current_alpha
+                    steerers.append(s)
+                    
         except Exception as e: print(f"❌ Vector error: {e}"); return
 
         if not steerers: print("❌ No steerers."); return
@@ -281,7 +311,7 @@ class DatasetInference:
                 elif 'prompt' in row: prompt = str(row['prompt']).strip()
                 else: prompt = str(row.iloc[-1]).strip()
                 
-                # Parsing Melody
+                # Parsing Melody (MANTENUTO)
                 melody_file = None
                 if 'melody_path' in row and pd.notna(row['melody_path']):
                     melody_file = str(row['melody_path']).strip()
@@ -292,19 +322,22 @@ class DatasetInference:
                 # A. Originale
                 self.mg.generate(prompt, f"{base}_orig", melody_path=melody_file)
                 
-                # B. Happy
-                for s in steerers: s.apply(alpha)
+                # --- LOGICA 2: APPLICAZIONE ALPHA DINAMICO ---
+                
+                # B. Happy (Usa s.target_alpha invece di alpha globale)
+                for s in steerers: s.apply(s.target_alpha)
                 self.mg.generate(prompt, f"{base}_pos", melody_path=melody_file)
                 for s in steerers: s.remove()
                 
-                # C. Sad
-                for s in steerers: s.apply(-alpha)
+                # C. Sad (Usa -s.target_alpha)
+                for s in steerers: s.apply(-s.target_alpha)
                 self.mg.generate(prompt, f"{base}_neg", melody_path=melody_file)
                 for s in steerers: s.remove()
                 
             except Exception as e:
                 print(f"Error {pid}: {e}")
                 for s in steerers: s.remove()
+                
 
 # ==========================================
 # 6. EVALUATION (Identica)
@@ -397,3 +430,177 @@ class Evaluation:
         evaluator = cls(audio_folder, output_dir, csv_filename, train_mode)
         evaluator.run_eval(num=num_samples)
         return evaluator
+    
+
+# ==========================================
+# 7. LAYER ANALYZER
+# ==========================================
+class LayerAnalyzer:
+    def __init__(self, model_wrapper):
+        self.mg = model_wrapper
+
+    def run_analysis(self, csv_path, output_dir, layers=None, safe_zone=(15, 38)):
+        """
+        Esegue l'analisi completa: Estrazione -> Silhouette -> Scelta Best Layer -> PCA.
+        
+        Args:
+            csv_path (str): Path al CSV dataset.
+            output_dir (str): Cartella dove salvare i grafici.
+            layers (list): Lista di layer da scansionare (default: 0-47).
+            safe_zone (tuple): (min, max) Layer range considerati validi per lo steering.
+                               I layer fuori da questo range vengono analizzati ma NON scelti come 'Best'.
+        """
+        if layers is None:
+            # Default per MusicGen Melody (48 layers)
+            layers = list(range(0, 48))
+        
+        print(f"🔬 Layer Analysis started on {len(layers)} layers...")
+        print(f"🛡️ Safe Zone for selection: Layer {safe_zone[0]} to {safe_zone[1]}")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 1. SETUP HOOKS
+        hooks = {}
+        for idx in layers:
+            try:
+                layer_module = self.mg.model.lm.transformer.layers[idx]
+                h = ActivationHook(layer_module)
+                h.register()
+                hooks[idx] = h
+            except:
+                print(f"⚠️ Warning: Could not hook layer {idx}")
+
+        # 2. DATA LOAD & EXTRACTION
+        try:
+            df = pd.read_csv(csv_path, sep=';')
+            if len(df) > 25: df = df.head(25) # Limitiamo per velocità
+        except Exception as e:
+            print(f"❌ CSV Error: {e}"); return None
+
+        layer_data = {idx: {'pos': [], 'neg': []} for idx in layers}
+
+        print("   Extracting activations...")
+        for i, row in tqdm(df.iterrows(), total=len(df)):
+            try:
+                p_pos = str(row['positive_prompt']).strip()
+                p_neg = str(row['negative_prompt']).strip()
+                
+                # Gestione Melodia
+                melody = row.get('melody_path', None)
+                if pd.isna(melody) or isinstance(melody, float): melody = None
+                elif isinstance(melody, str) and not os.path.exists(melody): melody = None
+
+                # Generate Happy
+                self.mg.generate(p_pos, melody_path=melody)
+                for idx, h in hooks.items():
+                    vec = h.get_mean_vector().cpu().numpy()
+                    layer_data[idx]['pos'].append(vec)
+                    h.activations = [] # Reset
+
+                # Generate Sad
+                self.mg.generate(p_neg, melody_path=melody)
+                for idx, h in hooks.items():
+                    vec = h.get_mean_vector().cpu().numpy()
+                    layer_data[idx]['neg'].append(vec)
+                    h.activations = [] # Reset
+            except Exception as e:
+                print(f"   Skip row {i}: {e}")
+
+        # Rimuovi Hooks
+        for h in hooks.values(): h.remove()
+
+        # 3. COMPUTE SCORES
+        print("\n🧮 Computing Silhouette Scores...")
+        final_scores = []
+        valid_layers_for_selection = []
+        valid_scores_for_selection = []
+
+        for idx in layers:
+            pos_vecs = np.array(layer_data[idx]['pos'])
+            neg_vecs = np.array(layer_data[idx]['neg'])
+            
+            if len(pos_vecs) == 0: 
+                final_scores.append(0)
+                continue
+
+            # Flattening dimensions if needed
+            if len(pos_vecs.shape) > 2: pos_vecs = pos_vecs.mean(axis=1)
+            if len(neg_vecs.shape) > 2: neg_vecs = neg_vecs.mean(axis=1)
+
+            X = np.concatenate([pos_vecs, neg_vecs])
+            y = np.array([1]*len(pos_vecs) + [0]*len(neg_vecs))
+
+            score = silhouette_score(X, y)
+            final_scores.append(score)
+            
+            # Filtro per la selezione del "Best Layer" (solo safe zone)
+            if safe_zone[0] <= idx <= safe_zone[1]:
+                valid_layers_for_selection.append(idx)
+                valid_scores_for_selection.append(score)
+
+        # 4. FIND BEST LAYER (IN SAFE ZONE)
+        if valid_layers_for_selection:
+            best_score_idx = np.argmax(valid_scores_for_selection)
+            best_layer = valid_layers_for_selection[best_score_idx]
+            best_score_val = valid_scores_for_selection[best_score_idx]
+            print(f"🏆 Best Layer (in Safe Zone): {best_layer} (Score: {best_score_val:.4f})")
+        else:
+            print("⚠️ No valid layers in safe zone found. Using global max.")
+            best_layer = layers[np.argmax(final_scores)]
+
+        # 5. PLOT 1: SILHOUETTE SCORE (Separation Analysis)
+        plt.figure(figsize=(12, 6))
+        plt.plot(layers, final_scores, marker='o', linestyle='-', color='purple', linewidth=2, label='Clustering Score')
+        plt.fill_between(layers, final_scores, alpha=0.2, color='purple')
+        
+        # Evidenzia il Safe Peak
+        plt.axvline(x=best_layer, color='red', linestyle='--', linewidth=2, label=f'Chosen Peak (Layer {best_layer})')
+        
+        # Evidenzia la Safe Zone
+        plt.axvspan(safe_zone[0], safe_zone[1], color='green', alpha=0.1, label='Safe Semantic Block')
+
+        plt.title("Emotion Separation Analysis by Layer", fontsize=14)
+        plt.xlabel("Layer Index", fontsize=12)
+        plt.ylabel("Silhouette Score (Higher is Better)", fontsize=12)
+        plt.legend(loc='upper left')
+        plt.grid(True, alpha=0.3)
+        
+        plot1_path = os.path.join(output_dir, "analysis_1_separation_scores.png")
+        plt.savefig(plot1_path, dpi=300)
+        print(f"✅ Saved Score Plot: {plot1_path}")
+        plt.close()
+
+        # 6. PLOT 2: PCA VISUALIZATION (For the Best Layer)
+        print(f"🎨 Generating PCA for Layer {best_layer}...")
+        
+        # Retrieve vectors for best layer
+        pos_vecs = np.array(layer_data[best_layer]['pos'])
+        neg_vecs = np.array(layer_data[best_layer]['neg'])
+        
+        if len(pos_vecs.shape) > 2: pos_vecs = pos_vecs.mean(axis=1)
+        if len(neg_vecs.shape) > 2: neg_vecs = neg_vecs.mean(axis=1)
+
+        X_pca = np.concatenate([pos_vecs, neg_vecs])
+        
+        pca = PCA(n_components=2)
+        X_2d = pca.fit_transform(X_pca)
+        
+        # Split back
+        pos_2d = X_2d[:len(pos_vecs)]
+        neg_2d = X_2d[len(pos_vecs):]
+
+        plt.figure(figsize=(10, 8))
+        plt.scatter(pos_2d[:, 0], pos_2d[:, 1], c='dodgerblue', s=100, alpha=0.7, label='Happy Prompts', edgecolors='white')
+        plt.scatter(neg_2d[:, 0], neg_2d[:, 1], c='crimson', s=100, alpha=0.7, label='Sad Prompts', edgecolors='white')
+        
+        plt.title(f"Latent Space Visualization (Layer {best_layer})", fontsize=14)
+        plt.xlabel(f"Principal Component 1 ({pca.explained_variance_ratio_[0]:.1%} variance)", fontsize=12)
+        plt.ylabel(f"Principal Component 2 ({pca.explained_variance_ratio_[1]:.1%} variance)", fontsize=12)
+        plt.legend(fontsize=12)
+        plt.grid(True, alpha=0.3)
+        
+        plot2_path = os.path.join(output_dir, f"analysis_2_pca_layer_{best_layer}.png")
+        plt.savefig(plot2_path, dpi=300)
+        print(f"✅ Saved PCA Plot: {plot2_path}")
+        plt.close()
+
+        return best_layer
