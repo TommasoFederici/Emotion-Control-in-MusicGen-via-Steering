@@ -240,52 +240,65 @@ class DatasetExtractor:
 class DatasetInference:
     def __init__(self, model_wrapper, layers=None):
         self.mg = model_wrapper
+        # Salva i layer di default passati all'inizializzazione
         self.default_layers = layers if isinstance(layers, list) else [layers] if layers else [14]
 
-    def run(self, prompts_file, vector_path, output_dir, alpha=1.5, max_samples=None):
+    def run(self, prompts_file, vector_path, output_dir, alpha=1.5, active_layers=None, max_samples=None):
         """
-        alpha: può essere un float (es. 1.5) oppure un dict (es. {'low': 1.0, 'high': 2.5})
+        Args:
+            alpha: float o dict (es. {'low': 0.8, 'high': 2.5})
+            active_layers: list (es. [14, 15]). Se None, usa self.default_layers.
         """
-        print(f"🚀 Multi-Layer Inference (Alpha Config: {alpha})...")
+        print(f"🚀 Multi-Layer Inference...")
+        print(f"   Alpha Config: {alpha}")
+        
+        # LOGICA DI SELEZIONE LAYER:
+        # Priorità: 1. active_layers (da run) -> 2. default_layers (da init) -> 3. None (usa tutto)
+        target_layers = active_layers if active_layers is not None else self.default_layers
+        print(f"   Target Layers Filter: {target_layers if target_layers else 'ALL LAYERS IN FILE'}")
         
         steerers = []
         try:
             data = torch.load(vector_path)
             
-            # --- LOGICA 1: CARICAMENTO E ASSEGNAZIONE ALPHA ---
             if isinstance(data, dict):
-                print(f"📦 Multi-Layer: {list(data.keys())}")
-                for idx, vec in data.items():
+                sorted_idxs = sorted(data.keys())
+                
+                for idx in sorted_idxs:
+                    # --- FILTRO CRUCIALE ---
+                    # Se abbiamo una lista target, saltiamo i layer che non ci sono
+                    if target_layers is not None and idx not in target_layers:
+                        continue 
+                    
+                    vec = data[idx]
                     target = self.mg.model.lm.transformer.layers[idx]
                     vec = vec / (vec.norm() + 1e-8)
                     if vec.dim() == 2 and vec.shape[0] > 1: vec = vec.mean(dim=0, keepdim=True)
                     
-                    # Calcolo Alpha specifico per questo layer
-                    current_alpha = 0.1 # Default
+                    # --- CALCOLO ALPHA IBRIDO ---
+                    current_alpha = 1.5 # Default fallback
                     if isinstance(alpha, (int, float)):
                         current_alpha = float(alpha)
                     elif isinstance(alpha, dict):
-                        # Logica Hybrid Steering
-                        if idx <= 18: # Blocco Basso
-                            current_alpha = alpha.get('low', 0.1)
-                        elif idx >= 19: # Blocco Alto
-                            current_alpha = alpha.get('high', 0.05)
-                        else:
-                            current_alpha = 0.1
+                        if idx <= 18: current_alpha = alpha.get('low', 1.0)
+                        elif idx >= 19: current_alpha = alpha.get('high', 2.0)
+                        else: current_alpha = 1.0
                     
-                    # Creo lo steerer e gli "incollo" il suo alpha target
                     s = DynamicSteering(target, vec)
                     s.target_alpha = current_alpha 
                     steerers.append(s)
+                    print(f"   ✅ Loaded Layer {idx} (Alpha: {current_alpha})")
             
             else:
                 # Fallback Single Layer
-                print(f"📦 Single-Layer: {self.default_layers}")
+                print(f"📦 Single-Layer Vector detected.")
                 vec = data
                 vec = vec / (vec.norm() + 1e-8)
-                current_alpha = float(alpha) if isinstance(alpha, (int, float)) else 0.1
+                current_alpha = float(alpha) if isinstance(alpha, (int, float)) else 1.5
                 
-                for idx in self.default_layers:
+                # Se single vector, lo applichiamo a tutti i target layers
+                targets = target_layers if target_layers else [14]
+                for idx in targets:
                     target = self.mg.model.lm.transformer.layers[idx]
                     s = DynamicSteering(target, vec)
                     s.target_alpha = current_alpha
@@ -293,7 +306,7 @@ class DatasetInference:
                     
         except Exception as e: print(f"❌ Vector error: {e}"); return
 
-        if not steerers: print("❌ No steerers."); return
+        if not steerers: print("❌ No steerers loaded. Check 'active_layers' list."); return
 
         try:
             df = pd.read_csv(prompts_file, sep=';')
@@ -305,26 +318,20 @@ class DatasetInference:
         for i, row in tqdm(df.iterrows(), total=len(df)):
             try:
                 pid = str(row.get('ID', row.get('id', i))).strip()
-                
-                # Parsing Prompt
                 if 'test_prompt' in row: prompt = str(row['test_prompt']).strip()
                 elif 'prompt' in row: prompt = str(row['prompt']).strip()
                 else: prompt = str(row.iloc[-1]).strip()
                 
-                # Parsing Melody (MANTENUTO)
                 melody_file = None
                 if 'melody_path' in row and pd.notna(row['melody_path']):
                     melody_file = str(row['melody_path']).strip()
 
-                safe_p = "".join([c for c in prompt if c.isalnum() or c in " _-"])[:20].replace(" ", "_")
                 base = os.path.join(output_dir, f"{pid}")
 
                 # A. Originale
                 self.mg.generate(prompt, f"{base}_orig", melody_path=melody_file)
                 
-                # --- LOGICA 2: APPLICAZIONE ALPHA DINAMICO ---
-                
-                # B. Happy (Usa s.target_alpha invece di alpha globale)
+                # B. Happy (Usa s.target_alpha)
                 for s in steerers: s.apply(s.target_alpha)
                 self.mg.generate(prompt, f"{base}_pos", melody_path=melody_file)
                 for s in steerers: s.remove()
