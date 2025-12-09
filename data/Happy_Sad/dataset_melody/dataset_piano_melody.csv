@@ -17,5 +17,5 @@ ID;positive_prompt;negative_prompt;melody_path
 16;A bright, cheerful dramatic piano underscore, with clear traces;A dark, depressive dramatic piano underscore, with clear traces;data/melodies/extraction/01_scale_major.wav
 17;A cheerful, happy symphony piano movement;A depressive, dark symphony piano movement;data/melodies/extraction/02_arpeggio_slow.wav
 18;A happy, bright Celtic piano;A sad, depressive Celtic piano;data/melodies/extraction/03_pulse_rhythm.wav
-19;A cheerful, happy video game piano track;A depressive, dark video game piano track;data/melodies/extraction/01_scale_major.wav
-20;A happy, cheerful piano studio quality;A sad, depressive piano studio quality;data/melodies/extraction/03_pulse_rhythm.wav
+19;A cheerful, happy video game piano track;A depressive, dark video game piano track;data/melodies/extraction/04_scale_down.wav
+20;A happy, cheerful piano studio quality;A sad, depressive piano studio quality;data/melodies/extraction/05_pentatonic.wav
