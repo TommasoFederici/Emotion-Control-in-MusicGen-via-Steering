@@ -10,7 +10,7 @@ import warnings
 # ==========================================
 # 🔇 BLOCCO SILENZIATORE (UPDATED)
 # ==========================================
-# Filtriamo aggressivamente i FutureWarning di Librosa per pulire l'output
+# Filtriamo i FutureWarning di Librosa per pulire l'output
 warnings.simplefilter("ignore")
 warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
 
@@ -77,7 +77,9 @@ class Evaluation:
 
         try:
             # Carica audio (solo primi 10s per velocità)
-            y, sr = librosa.load(audio_path, duration=10)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                y, sr = librosa.load(audio_path, duration=10)
             
             # 1. Spectral Centroid (Brillantezza)
             cent = librosa.feature.spectral_centroid(y=y, sr=sr)
@@ -87,14 +89,19 @@ class Evaluation:
             rms = librosa.feature.rms(y=y)
             avg_rms = np.mean(rms)
             
-            # 3. Tempo (BPM stimati) - FIX WARNING
+            # 3. Tempo (BPM stimati) - FIX COMPATIBILITÀ
             onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-            # Usiamo la nuova sintassi se disponibile, altrimenti fallback
+            
+            # Tenta di usare la nuova funzione, fallback sulla vecchia se necessario
             try:
-                tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)
-            except AttributeError:
-                tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
-                
+                if hasattr(librosa.feature, 'rhythm') and hasattr(librosa.feature.rhythm, 'tempo'):
+                     tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)
+                else:
+                     # Fallback per versioni vecchie o intermedie
+                     tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
+            except Exception:
+                tempo = [0] # Caso di emergenza
+
             avg_tempo = tempo[0] if isinstance(tempo, np.ndarray) else tempo
 
             return {
@@ -104,7 +111,6 @@ class Evaluation:
             }
             
         except Exception as e:
-            # print(f"Warning Librosa: {e}") # Decommenta per debug
             return {"centroid": 0, "rms": 0, "tempo": 0}
 
     def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
@@ -211,11 +217,9 @@ class Evaluation:
             s_pos = self._get_valence_score(path_pos) if os.path.exists(path_pos) else 0.0
             s_neg = self._get_valence_score(path_neg) if os.path.exists(path_neg) else 0.0
 
-            # Estrai features silenziando i warning
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                feat_pos = self.extract_acoustic_features(path_pos)
-                feat_neg = self.extract_acoustic_features(path_neg)
+            # Estrai features
+            feat_pos = self.extract_acoustic_features(path_pos)
+            feat_neg = self.extract_acoustic_features(path_neg)
 
             if self.train_mode:
                 data.append({
@@ -230,9 +234,7 @@ class Evaluation:
             else:
                 path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
                 s_neutral = self._get_valence_score(path_orig) if os.path.exists(path_orig) else 0.0
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    feat_orig = self.extract_acoustic_features(path_orig)
+                feat_orig = self.extract_acoustic_features(path_orig)
                 
                 data.append({
                     "id": audio_id,
