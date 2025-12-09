@@ -1,21 +1,21 @@
 ID;test_prompt;melody_path
 1;A grand piano with a clear technical tone, high fidelity recording;data/melodies/extraction/01_scale_major.wav
 2;A bright piano recording, clear tonality;data/melodies/extraction/02_arpeggio_slow.wav
-3;A piano with dry sound quality, sharp attack, no pedal;data/melodies/extraction/03_pulse_rhythm.wav
+3;A piano with dry sound quality, sharp attack, no pedal;data/melodies/extraction/03_random.wav
 4;A piano with a percussive tone, low register focus;data/melodies/extraction/04_scale_down.wav
 5;A mechanical piano recording, consistent dynamics, neutral tone;data/melodies/extraction/05_pentatonic.wav
 6;A simple piano accompaniment sound, functional style;data/melodies/extraction/01_scale_major.wav
 7;A piano with sharp attack, dry sound quality;data/melodies/extraction/02_arpeggio_slow.wav
-8;A standard rock-style piano, clean tone;data/melodies/extraction/03_pulse_rhythm.wav
+8;A standard rock-style piano, clean tone;data/melodies/extraction/03_random.wav
 9;A minimal piano recording focused on the left hand bass register;data/melodies/extraction/04_scale_down.wav
 10;A piano playing with a swing jazz tone, instrumental style;data/melodies/extraction/05_pentatonic.wav
 11;An acoustic guitar, simple folk texture;data/melodies/extraction/01_scale_major.wav
 12;A solo flute with a clear and bright classical tone;data/melodies/extraction/02_arpeggio_slow.wav
-13;A drum kit, standard rock sound;data/melodies/extraction/03_pulse_rhythm.wav
+13;A drum kit, standard rock sound;data/melodies/extraction/03_random.wav
 14;A synthesizer with a neutral tone, electronic texture;data/melodies/extraction/04_scale_down.wav
 15;An electric bass, clean low-end tone;data/melodies/extraction/05_pentatonic.wav
 16;A solo violin, virtuoso style, technical and complex timbre;data/melodies/extraction/01_scale_major.wav
 17;A jazz fusion ensemble sound, intricate performance style;data/melodies/extraction/02_arpeggio_slow.wav
-18;A grand orchestral texture with multiple instruments, intense and dense;data/melodies/extraction/03_pulse_rhythm.wav
+18;A grand orchestral texture with multiple instruments, intense and dense;data/melodies/extraction/03_random.wav
 19;An electric guitar with high gain distortion, technical playing style;data/melodies/extraction/04_scale_down.wav
 20;A complex drum recording, high skill, studio quality;data/melodies/extraction/05_pentatonic.wav
