@@ -85,11 +85,13 @@ save_sequence(
     folder=EXT_DIR, name="02_arpeggio_slow"
 )
 
-# C. Pulsazione Ritmica (Nota ripetuta)
+# C. Random Walk (Imprevedibile ma neutro)
+random.seed(42) # Per riproducibilità
+rand_notes = [random.choice([C4, D4, E4, F4, G4, A4, B4]) for _ in range(12)]
 save_sequence(
-    freqs=[G4, G4, G4, G4, C5, C5, G4, G4], 
-    durations=[0.25]*8, 
-    folder=EXT_DIR, name="03_pulse_rhythm"
+    freqs=rand_notes, 
+    durations=[0.4]*12, 
+    folder=EXT_DIR, name="03_random"
 )
 
 # D. Melodia Discendente
@@ -113,13 +115,11 @@ save_sequence(
 # Devono essere diverse ma comunque neutre (senza emozione forte).
 print("\n--- Generazione Set TEST (Pattern Diversi) ---")
 
-# A. Random Walk (Imprevedibile ma neutro)
-random.seed(42) # Per riproducibilità
-rand_notes = [random.choice([C4, D4, E4, F4, G4, A4, B4]) for _ in range(12)]
+# A. Pulsazione Ritmica (Nota ripetuta)
 save_sequence(
-    freqs=rand_notes, 
-    durations=[0.4]*12, 
-    folder=TEST_DIR, name="test_01_random"
+    freqs=[G4, G4, G4, G4, C5, C5, G4, G4], 
+    durations=[0.25]*8, 
+    folder=TEST_DIR, name="test_01_pulse_rhythm"
 )
 
 # B. Bassi Profondi (Neutro/Scuro)
