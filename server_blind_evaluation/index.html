@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valutazione Audio</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        
+        h1 { text-align: center; color: #333; }
+        .user-info { text-align: center; margin-bottom: 20px; color: #666; font-weight: bold; }
+        
+        /* Stile BOX del Gruppo */
+        .audio-group-box {
+            background: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-left: 5px solid #AFCB39
+        }
+        .group-title { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+
+        /* Stile singola riga traccia */
+        .track-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .track-label { font-weight: bold; min-width: 80px; }
+        audio { height: 35px; width: 300px; margin: 0 10px; }
+        
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            width: 150px;
+            cursor: pointer;
+        }
+
+        /* Bottone Finale */
+        .submit-section { text-align: center; margin-top: 40px; padding-bottom: 50px; }
+        button#btnInvia {
+            background-color: #28a745; color: white; border: none;
+            padding: 15px 40px; font-size: 1.2em; border-radius: 50px;
+            cursor: pointer; transition: background 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        button#btnInvia:hover { background-color: #218838; }
+        button#btnInvia:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        .error { border: 2px solid red; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Test di Percezione Emotiva</h1>
+        <div class="user-info">ID Utente: <span id="displayUserId">...</span></div>
+        
+        <div id="test-container">
+            <p style="text-align:center">Caricamento tracce...</p>
+        </div>
+
+        <div class="submit-section">
+            <button id="btnInvia" onclick="inviaRisultati()">Invia Valutazione</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. Genera un ID Utente Casuale (es. 8392)
+        const userId = Math.floor(1000 + Math.random() * 9000);
+        document.getElementById('displayUserId').innerText = userId;
+
+        const options = ["Happy", "Sad", "Neutral"];
+        let audioGroups = {}; // Conterrà i dati raggruppati
+
+        // 2. Carica la lista dei file e inizializza
+        fetch('/lista-audio')
+        .then(res => res.json())
+        .then(files => {
+            organizzaFile(files);
+            renderizzaInterfaccia();
+        });
+
+        // Funzione per raggruppare i file per numero iniziale (es. "1_abc.wav" -> Gruppo "1")
+        function organizzaFile(files) {
+            files.forEach(file => {
+                const prefix = file.split('_')[0]; // Prende il numero prima dell'underscore
+                if (!audioGroups[prefix]) audioGroups[prefix] = [];
+                audioGroups[prefix].push(file);
+            });
+        }
+
+        // Algoritmo Fisher-Yates per mischiare array
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // 3. Renderizza i BOX HTML
+        function renderizzaInterfaccia() {
+            const container = document.getElementById('test-container');
+            container.innerHTML = "";
+
+            // Ordina le chiavi dei gruppi (1, 2, 3...)
+            const groupKeys = Object.keys(audioGroups).sort((a,b) => a - b);
+
+            groupKeys.forEach(groupKey => {
+                let tracks = audioGroups[groupKey];
+                
+                // MISCHIA LE TRACCE (Randomizzazione all'interno del box)
+                shuffle(tracks);
+
+                // Crea il Box HTML
+                const box = document.createElement('div');
+                box.className = 'audio-group-box';
+                box.dataset.group = groupKey;
+                
+                box.innerHTML = `<h3 class="group-title">Gruppo Audio ${groupKey}</h3>`;
+
+                tracks.forEach((filename, index) => {
+                    const row = document.createElement('div');
+                    row.className = 'track-row';
+                    
+                    // Nota: data-real-filename conserva il nome vero per il CSV
+                    row.innerHTML = `
+                        <span class="track-label">Traccia ${index + 1}</span>
+                        <audio controls src="/audio/${filename}"></audio>
+                        <select class="emotion-select" data-real-filename="${filename}" onchange="gestisciEsclusione(this)">
+                            <option value="">-- Seleziona --</option>
+                            ${options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                        </select>
+                    `;
+                    box.appendChild(row);
+                });
+
+                container.appendChild(box);
+            });
+        }
+
+        // 4. Logica "Menu a tendina esclusivi"
+        function gestisciEsclusione(selectChanged) {
+            // Trova il box genitore
+            const box = selectChanged.closest('.audio-group-box');
+            const allSelects = box.querySelectorAll('select');
+            
+            // Raccogli tutti i valori attualmente selezionati in questo box
+            let selectedValues = [];
+            allSelects.forEach(sel => {
+                if (sel.value) selectedValues.push(sel.value);
+            });
+
+            // Aggiorna ogni menu a tendina nel box
+            allSelects.forEach(sel => {
+                const currentValue = sel.value;
+                const options = sel.querySelectorAll('option');
+
+                options.forEach(opt => {
+                    // Salta l'opzione placeholder vuota
+                    if (opt.value === "") return;
+
+                    // Logica: Disabilita se è selezionato altrove, MA NON se è selezionato da me stesso
+                    if (selectedValues.includes(opt.value) && opt.value !== currentValue) {
+                        opt.disabled = true;
+                        opt.innerText = opt.value + " (Già usato)";
+                    } else {
+                        opt.disabled = false;
+                        opt.innerText = opt.value;
+                    }
+                });
+            });
+        }
+
+        // 5. Invia i dati al Server
+        function inviaRisultati() {
+            const selects = document.querySelectorAll('select');
+            let risultati = [];
+            let tuttoCompleto = true;
+
+            // Raccoglie i dati e valida
+            selects.forEach(sel => {
+                if (!sel.value) {
+                    sel.style.border = "2px solid red"; // Evidenzia errore
+                    tuttoCompleto = false;
+                } else {
+                    sel.style.border = "1px solid #ccc";
+                    
+                    // Recupera info
+                    const box = sel.closest('.audio-group-box');
+                    risultati.push({
+                        gruppo: box.dataset.group,
+                        file_reale: sel.dataset.realFilename, // Il nome file vero
+                        emozione: sel.value
+                    });
+                }
+            });
+
+            if (!tuttoCompleto) {
+                alert("Per favore, seleziona un'opzione per tutte le tracce.");
+                return;
+            }
+
+            // Invio Fetch
+            const btn = document.getElementById('btnInvia');
+            btn.disabled = true;
+            btn.innerText = "Invio in corso...";
+
+            fetch('/salva-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userId, risultati: risultati })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'successo') {
+                    alert("Grazie! I tuoi dati sono stati salvati.");
+                    location.reload(); // Ricarica per un nuovo utente o sessione
+                } else {
+                    alert("Errore nel salvataggio.");
+                    btn.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Errore di connessione.");
+                btn.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>

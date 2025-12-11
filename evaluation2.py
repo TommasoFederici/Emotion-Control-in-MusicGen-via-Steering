@@ -5,9 +5,17 @@ import matplotlib.colors as mcolors
 import numpy as np
 from transformers import pipeline
 import librosa
+import warnings
 
 # ==========================================
-# 6. EVALUATION CLASS (CORRETTA)
+# 🔇 BLOCCO SILENZIATORE (UPDATED)
+# ==========================================
+# Filtriamo i FutureWarning di Librosa per pulire l'output
+warnings.simplefilter("ignore")
+warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
+
+# ==========================================
+# 6. EVALUATION CLASS (UPDATED)
 # ==========================================
 class Evaluation:
     def __init__(self, audio_folder, output_dir, csv_filename, train_mode=False, label_pos="happy mood", label_neg="sad mood"):
@@ -58,7 +66,7 @@ class Evaluation:
         except Exception as e:
             return 0.0
 
-    # --- METRICHE FISICHE (LIBROSA) ---
+    # --- METRICHE FISICHE (LIBROSA FIX) ---
     def extract_acoustic_features(self, audio_path):
         """
         Estrae metriche fisiche dal file audio usando Librosa.
@@ -69,7 +77,9 @@ class Evaluation:
 
         try:
             # Carica audio (solo primi 10s per velocità)
-            y, sr = librosa.load(audio_path, duration=10)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                y, sr = librosa.load(audio_path, duration=10)
             
             # 1. Spectral Centroid (Brillantezza)
             cent = librosa.feature.spectral_centroid(y=y, sr=sr)
@@ -79,9 +89,19 @@ class Evaluation:
             rms = librosa.feature.rms(y=y)
             avg_rms = np.mean(rms)
             
-            # 3. Tempo (BPM stimati)
+            # 3. Tempo (BPM stimati) - FIX COMPATIBILITÀ
             onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-            tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
+            
+            # Tenta di usare la nuova funzione, fallback sulla vecchia se necessario
+            try:
+                if hasattr(librosa.feature, 'rhythm') and hasattr(librosa.feature.rhythm, 'tempo'):
+                     tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)
+                else:
+                     # Fallback per versioni vecchie o intermedie
+                     tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
+            except Exception:
+                tempo = [0] # Caso di emergenza
+
             avg_tempo = tempo[0] if isinstance(tempo, np.ndarray) else tempo
 
             return {
@@ -96,15 +116,13 @@ class Evaluation:
     def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
         plt.figure(figsize=(12, 6))
         
-        # --- FIX ASSE X: Usa posizioni fisse per garantire che ogni label appaia ---
-        x_pos = np.arange(len(x_labels)) # Crea array [0, 1, 2, ..., N]
-        x_labels_str = [str(x) for x in x_labels] # Converte ID in stringhe "1", "2"...
+        x_pos = np.arange(len(x_labels)) 
+        x_labels_str = [str(x) for x in x_labels]
         
         cmap = plt.get_cmap('bwr')
         norm = mcolors.Normalize(vmin=-1, vmax=1) 
         bar_colors = cmap(norm(values))
 
-        # Usa x_pos invece di x_labels per il plot
         bars = plt.bar(x_pos, values, color=bar_colors, edgecolor='black', width=0.6)
         
         plt.axhline(0, color='black', linewidth=1.5)
@@ -117,8 +135,7 @@ class Evaluation:
 
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         
-        # --- FIX: Forza la scrittura di tutte le label nelle posizioni corrette ---
-        plt.xticks(x_pos, x_labels_str, rotation=0) # rotation=0 le tiene dritte se ci stanno
+        plt.xticks(x_pos, x_labels_str, rotation=0) 
 
         y_range = y_limit[1] - y_limit[0]
         offset = y_range * 0.02
@@ -183,7 +200,7 @@ class Evaluation:
         
         self._create_bar_chart(labels, deltas, title, y_label, y_limit=(-2.0, 2.0))
 
-    # --- SALVATAGGIO CSV (CON AVG) ---
+    # --- SALVATAGGIO CSV (CON AVG PRINT) ---
     def save_to_csv(self):
         """Salva il CSV includendo metriche fisiche e riga AVG finale."""
         os.makedirs(self.output_dir, exist_ok=True)
@@ -194,13 +211,13 @@ class Evaluation:
         data = []
 
         for i, audio_id in enumerate(self.ids):
-            # ... (Il codice di estrazione rimane uguale) ...
             path_pos = os.path.join(self.audio_folder, f"{audio_id}_pos.wav")
             path_neg = os.path.join(self.audio_folder, f"{audio_id}_neg.wav")
             
             s_pos = self._get_valence_score(path_pos) if os.path.exists(path_pos) else 0.0
             s_neg = self._get_valence_score(path_neg) if os.path.exists(path_neg) else 0.0
 
+            # Estrai features
             feat_pos = self.extract_acoustic_features(path_pos)
             feat_neg = self.extract_acoustic_features(path_neg)
 
@@ -232,9 +249,6 @@ class Evaluation:
                     "orig_rms": feat_orig['rms'],
                     "pos_rms": feat_pos['rms'],
                     "neg_rms": feat_neg['rms'],
-                    # BPM opzionale se serve
-                    # "orig_bpm": feat_orig['tempo'],
-                    # "pos_bpm": feat_pos['tempo']
                 })
 
             if i % 5 == 0:
@@ -243,25 +257,36 @@ class Evaluation:
         # Creazione DataFrame
         df = pd.DataFrame(data)
         
-        # --- CALCOLO RIGA AVG ---
-        # Calcoliamo la media solo sulle colonne numeriche (escludendo 'id' se non è indice)
+        # --- CALCOLO E STAMPA MEDIA ---
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         if 'id' in numeric_cols: numeric_cols.remove('id')
         
-        # Creiamo un dizionario per la riga AVG
         avg_row = {col: round(df[col].mean(), 4) for col in numeric_cols}
-        avg_row['id'] = "AVG" # Etichetta speciale
         
-        # Aggiungiamo la riga al DataFrame
-        # (Usa pd.concat per essere compatibile con le nuove versioni di pandas)
+        # === STAMPA MEDIE ===
+        print("\n" + "="*40)
+        print("📊  MEDIA PUNTEGGI (AVERAGE SCORES)")
+        print("="*40)
+        if 'score_pos' in avg_row:
+            print(f"🔹 Positive Score Avg: {avg_row['score_pos']}")
+        if 'score_neg' in avg_row:
+            print(f"🔸 Negative Score Avg: {avg_row['score_neg']}")
+        
+        # Stampa anche i delta se siamo in FULL MODE
+        if 'delta_pos' in avg_row:
+            print(f"🔺 Delta Positive Avg: {avg_row['delta_pos']}")
+        if 'delta_neg' in avg_row:
+            print(f"🔻 Delta Negative Avg: {avg_row['delta_neg']}")
+        print("="*40 + "\n")
+        # =====================
+
+        avg_row['id'] = "AVG" 
         df_avg = pd.DataFrame([avg_row])
         df = pd.concat([df, df_avg], ignore_index=True)
         
         try:
             df.to_csv(full_path, sep=';', index=False)
-            print(f"\nCOMPLETATO. File salvato in: {full_path}")
-            print("Ultime righe (inclusa AVG):")
-            print(df.tail()) 
+            print(f"✅ CSV completato e salvato in: {full_path}")
         except Exception as e:
             print(f"Errore nel salvare il CSV: {e}")
 
@@ -285,17 +310,3 @@ class Evaluation:
         evaluator = cls(audio_folder, output_dir, csv_filename, train_mode, label_pos, label_neg)
         evaluator.evaluate(num_samples_plot=num_samples, y_label=y_label)
         return evaluator
-
-# ==========================================
-# EXECUTION BLOCK
-# ==========================================
-if __name__ == "__main__":
-    
-    Evaluation.run(
-        audio_folder="data/Happy_Sad/audio",
-        output_dir="data/Happy_Sad", 
-        csv_filename="score_test_Happy_Sad_PROVACONMETRICHE.csv",
-        train_mode=True,  
-        num_samples=20,
-        y_label="Happyness score"
-    )
