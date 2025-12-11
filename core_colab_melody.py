@@ -113,7 +113,10 @@ class DynamicSteering:
     def __init__(self, module, steering_vector):
         self.module = module
         self.handle = None
-        self.alpha = 0.0
+        self.base_alpha = 0.0
+        self.decay = 1.0 # 1.0 = Nessun decadimento (costante)
+        self.step = 0    # Contatore passi temporali
+        
         try: device = next(module.parameters()).device
         except: device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
@@ -124,19 +127,43 @@ class DynamicSteering:
     def hook_fn(self, module, input, output):
         if isinstance(output, tuple): h, other = output[0], output[1:]
         else: h, other = output, ()
-        h_new = (h + (self.alpha * self.vector)) / (1 + abs(self.alpha))
+        
+        # --- CALCOLO ALPHA CON DECAY ---
+        # Formula: alpha_t = alpha_start * (decay ^ t)
+        # Esempio: se decay=0.99, al passo 100 l'alpha è il 36% dell'originale.
+        current_alpha = self.base_alpha * (self.decay ** self.step)
+        
+        # Incrementa il passo per la prossima chiamata
+        self.step += 1
+        
+        # Applica Steering Normalizzato (Eq. 5 del Paper)
+        # (h + alpha*v) / (1 + |alpha|)
+        h_new = (h + (current_alpha * self.vector)) / (1 + abs(current_alpha))
+        
         if other: return (h_new,) + other
         return h_new
 
-    def apply(self, coefficient=1.0):
-        self.alpha = coefficient
+    def apply(self, coefficient=1.0, decay=1.0):
+        """
+        Attiva l'hook.
+        decay: fattore moltiplicativo per ogni token (es. 0.99). 1.0 = disattivato.
+        """
+        self.base_alpha = coefficient
+        self.decay = decay
+        self.step = 0 # Reset contatore all'attivazione
+        
         if self.handle is None:
             self.handle = self.module.register_forward_hook(self.hook_fn)
+            
+    def reset_steps(self):
+        """Resetta il contatore temporale (da chiamare a ogni nuova generazione)"""
+        self.step = 0
         
     def remove(self):
         if self.handle:
             self.handle.remove()
             self.handle = None
+        self.step = 0
 
 # ==========================================
 # 4. DATASET EXTRACTOR (Con Supporto Melodia)
@@ -240,20 +267,19 @@ class DatasetExtractor:
 class DatasetInference:
     def __init__(self, model_wrapper, layers=None):
         self.mg = model_wrapper
-        # Salva i layer di default passati all'inizializzazione
         self.default_layers = layers if isinstance(layers, list) else [layers] if layers else [14]
 
-    def run(self, prompts_file, vector_path, output_dir, alpha=1.5, active_layers=None, max_samples=None):
+    def run(self, prompts_file, vector_path, output_dir, alpha=1.5, decay=1.0, active_layers=None, max_samples=None):
         """
         Args:
             alpha: float o dict (es. {'low': 0.8, 'high': 2.5})
+            decay: float (es. 0.99). 1.0 = costante.
             active_layers: list (es. [14, 15]). Se None, usa self.default_layers.
         """
         print(f"🚀 Multi-Layer Inference...")
         print(f"   Alpha Config: {alpha}")
+        print(f"   Decay Factor: {decay}")
         
-        # LOGICA DI SELEZIONE LAYER:
-        # Priorità: 1. active_layers (da run) -> 2. default_layers (da init) -> 3. None (usa tutto)
         target_layers = active_layers if active_layers is not None else self.default_layers
         print(f"   Target Layers Filter: {target_layers if target_layers else 'ALL LAYERS IN FILE'}")
         
@@ -263,10 +289,7 @@ class DatasetInference:
             
             if isinstance(data, dict):
                 sorted_idxs = sorted(data.keys())
-                
                 for idx in sorted_idxs:
-                    # --- FILTRO CRUCIALE ---
-                    # Se abbiamo una lista target, saltiamo i layer che non ci sono
                     if target_layers is not None and idx not in target_layers:
                         continue 
                     
@@ -275,8 +298,8 @@ class DatasetInference:
                     vec = vec / (vec.norm() + 1e-8)
                     if vec.dim() == 2 and vec.shape[0] > 1: vec = vec.mean(dim=0, keepdim=True)
                     
-                    # --- CALCOLO ALPHA IBRIDO ---
-                    current_alpha = 1.5 # Default fallback
+                    # Alpha Ibrido
+                    current_alpha = 1.5 
                     if isinstance(alpha, (int, float)):
                         current_alpha = float(alpha)
                     elif isinstance(alpha, dict):
@@ -285,28 +308,28 @@ class DatasetInference:
                         else: current_alpha = 1.0
                     
                     s = DynamicSteering(target, vec)
+                    # Salvataggio parametri nello steerer
                     s.target_alpha = current_alpha 
+                    s.target_decay = decay 
                     steerers.append(s)
-                    print(f"   ✅ Loaded Layer {idx} (Alpha: {current_alpha})")
+                    print(f"   ✅ Loaded Layer {idx} (Alpha: {current_alpha}, Decay: {decay})")
             
             else:
                 # Fallback Single Layer
-                print(f"📦 Single-Layer Vector detected.")
                 vec = data
                 vec = vec / (vec.norm() + 1e-8)
                 current_alpha = float(alpha) if isinstance(alpha, (int, float)) else 1.5
-                
-                # Se single vector, lo applichiamo a tutti i target layers
                 targets = target_layers if target_layers else [14]
                 for idx in targets:
                     target = self.mg.model.lm.transformer.layers[idx]
                     s = DynamicSteering(target, vec)
                     s.target_alpha = current_alpha
+                    s.target_decay = decay
                     steerers.append(s)
                     
         except Exception as e: print(f"❌ Vector error: {e}"); return
 
-        if not steerers: print("❌ No steerers loaded. Check 'active_layers' list."); return
+        if not steerers: print("❌ No steerers loaded."); return
 
         try:
             df = pd.read_csv(prompts_file, sep=';')
@@ -331,20 +354,24 @@ class DatasetInference:
                 # A. Originale
                 self.mg.generate(prompt, f"{base}_orig", melody_path=melody_file)
                 
-                # B. Happy (Usa s.target_alpha)
-                for s in steerers: s.apply(s.target_alpha)
+                # B. Happy (con Decay)
+                for s in steerers: 
+                    s.reset_steps() # Reset tempo
+                    s.apply(s.target_alpha, s.target_decay) # Passa decay
                 self.mg.generate(prompt, f"{base}_pos", melody_path=melody_file)
                 for s in steerers: s.remove()
                 
-                # C. Sad (Usa -s.target_alpha)
-                for s in steerers: s.apply(-s.target_alpha)
+                # C. Sad (con Decay)
+                for s in steerers: 
+                    s.reset_steps() # Reset tempo
+                    s.apply(-s.target_alpha, s.target_decay) # Passa decay
                 self.mg.generate(prompt, f"{base}_neg", melody_path=melody_file)
                 for s in steerers: s.remove()
                 
             except Exception as e:
                 print(f"Error {pid}: {e}")
                 for s in steerers: s.remove()
-                
+
 
 # ==========================================
 # 6. EVALUATION (Identica)
