@@ -7,15 +7,9 @@ from transformers import pipeline
 import librosa
 import warnings
 
-# ==========================================
-# 🔇 BLOCCO SILENZIATORE (UPDATED)
-# ==========================================
-# Filtriamo i FutureWarning di Librosa per pulire l'output
-warnings.simplefilter("ignore")
-warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
 
 # ==========================================
-# 6. EVALUATION CLASS (UPDATED)
+# 6. EVALUATION CLASS 
 # ==========================================
 class Evaluation:
     def __init__(self, audio_folder, output_dir, csv_filename, train_mode=False, label_pos="happy mood", label_neg="sad mood"):
@@ -66,14 +60,14 @@ class Evaluation:
         except Exception as e:
             return 0.0
 
-    # --- METRICHE FISICHE (LIBROSA FIX) ---
     def extract_acoustic_features(self, audio_path):
         """
         Estrae metriche fisiche dal file audio usando Librosa.
         Ritorna un dizionario con i valori medi.
+        ORA SENZA RMS.
         """
         if not os.path.exists(audio_path):
-            return {"centroid": 0, "rms": 0, "tempo": 0}
+            return {"centroid": 0}
 
         try:
             # Carica audio (solo primi 10s per velocità)
@@ -85,33 +79,12 @@ class Evaluation:
             cent = librosa.feature.spectral_centroid(y=y, sr=sr)
             avg_centroid = np.mean(cent)
             
-            # 2. RMS Energy (Volume/Energia)
-            rms = librosa.feature.rms(y=y)
-            avg_rms = np.mean(rms)
-            
-            # 3. Tempo (BPM stimati) - FIX COMPATIBILITÀ
-            onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-            
-            # Tenta di usare la nuova funzione, fallback sulla vecchia se necessario
-            try:
-                if hasattr(librosa.feature, 'rhythm') and hasattr(librosa.feature.rhythm, 'tempo'):
-                     tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)
-                else:
-                     # Fallback per versioni vecchie o intermedie
-                     tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
-            except Exception:
-                tempo = [0] # Caso di emergenza
-
-            avg_tempo = tempo[0] if isinstance(tempo, np.ndarray) else tempo
-
             return {
-                "centroid": round(float(avg_centroid), 2),
-                "rms": round(float(avg_rms), 4),
-                "tempo": round(float(avg_tempo), 1)
+                "centroid": round(float(avg_centroid), 2)
             }
             
         except Exception as e:
-            return {"centroid": 0, "rms": 0, "tempo": 0}
+            return {"centroid": 0}
 
     def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
         plt.figure(figsize=(12, 6))
@@ -200,9 +173,9 @@ class Evaluation:
         
         self._create_bar_chart(labels, deltas, title, y_label, y_limit=(-2.0, 2.0))
 
-    # --- SALVATAGGIO CSV (CON AVG PRINT) ---
+    # --- SALVATAGGIO CSV  ---
     def save_to_csv(self):
-        """Salva il CSV includendo metriche fisiche e riga AVG finale."""
+        """Salva il CSV includendo metriche fisiche (SOLO CENTROIDE) e riga AVG finale."""
         os.makedirs(self.output_dir, exist_ok=True)
         full_path = os.path.join(self.output_dir, self.csv_filename)
 
@@ -227,9 +200,7 @@ class Evaluation:
                     "score_pos": round(s_pos, 4),
                     "score_neg": round(s_neg, 4),
                     "pos_centroid": feat_pos['centroid'],
-                    "pos_rms": feat_pos['rms'],
-                    "neg_centroid": feat_neg['centroid'],
-                    "neg_rms": feat_neg['rms']
+                    "neg_centroid": feat_neg['centroid']
                 })
             else:
                 path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
@@ -245,10 +216,7 @@ class Evaluation:
                     "delta_neg": round(s_neg - s_neutral, 4),
                     "orig_centroid": feat_orig['centroid'],
                     "pos_centroid": feat_pos['centroid'],
-                    "neg_centroid": feat_neg['centroid'],
-                    "orig_rms": feat_orig['rms'],
-                    "pos_rms": feat_pos['rms'],
-                    "neg_rms": feat_neg['rms'],
+                    "neg_centroid": feat_neg['centroid']
                 })
 
             if i % 5 == 0:
