@@ -63,7 +63,8 @@ def analyze_and_plot():
 
         # Raggruppa per ID traccia e Nome File
         grouped = df.groupby(['Track_ID_Ref', 'Filename']).agg(
-            Total_Score=('Numeric_Score', 'mean'),
+            # Assicurati che il nome qui sia 'Average_Score'
+            Average_Score=('Numeric_Score', 'mean'), 
             Num_Votes=('User_ID', 'count')
         ).reset_index()
 
@@ -138,8 +139,9 @@ def create_bar_chart(x_labels, values, title, output_dir, filename_suffix, max_v
     offset = y_lim * 0.05
     for bar, score in zip(bars, values):
         y_txt = score + offset if score >= 0 else score - offset
-        plt.text(bar.get_x() + bar.get_width()/2, y_txt, f"{int(score)}", 
-                 ha='center', va='center', fontweight='bold', fontsize=10)
+        # Formattazione per float con 4 cifre decimali
+        plt.text(bar.get_x() + bar.get_width()/2, y_txt, f"{score:.2f}", 
+                ha='center', va='center', fontweight='bold', fontsize=10)
 
     plt.tight_layout()
     
