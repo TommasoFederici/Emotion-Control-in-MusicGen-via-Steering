@@ -63,7 +63,7 @@ def analyze_and_plot():
 
         # Raggruppa per ID traccia e Nome File
         grouped = df.groupby(['Track_ID_Ref', 'Filename']).agg(
-            Total_Score=('Numeric_Score', 'sum'),
+            Total_Score=('Numeric_Score', 'mean'),
             Num_Votes=('User_ID', 'count')
         ).reset_index()
 
@@ -86,7 +86,7 @@ def analyze_and_plot():
         grouped['Category'] = grouped['Filename'].apply(get_category)
 
         # Calcola scala grafico
-        max_abs_score = grouped['Total_Score'].abs().max()
+        max_abs_score = grouped['Average_Score'].abs().max() 
         if pd.isna(max_abs_score) or max_abs_score == 0: max_abs_score = 1
         y_limit = max_abs_score + 1
 
@@ -99,7 +99,7 @@ def analyze_and_plot():
                 continue
 
             ids = subset['Track_ID_Ref'].astype(str).tolist()
-            scores = subset['Total_Score'].tolist()
+            scores = subset['Average_Score'].tolist()
             
             # Titoli
             if cat == "Positive": title = "Valutazione Tracce POSITIVE (Target: Happy)"
@@ -129,7 +129,7 @@ def create_bar_chart(x_labels, values, title, output_dir, filename_suffix, max_v
     
     plt.title(title, fontsize=16)
     plt.xlabel("Track ID", fontsize=12)
-    plt.ylabel("Total Score", fontsize=12)
+    plt.ylabel("Mean Score", fontsize=12)
     
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.xticks(x_pos, x_labels, rotation=0)
