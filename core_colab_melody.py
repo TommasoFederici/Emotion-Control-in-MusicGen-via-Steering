@@ -187,8 +187,6 @@ class DatasetExtractor:
         
         self.hooks = {}
         for idx in self.target_layers_indices:
-            # Nota: MusicGen Melody potrebbe avere più layer (48).
-            # Assicurati che l'indice esista.
             try:
                 layer_module = self.mg.model.lm.transformer.layers[idx]
                 self.hooks[idx] = ActivationHook(layer_module)
@@ -616,7 +614,7 @@ class LayerAnalyzer:
 
         plt.title("Emotion Separation Analysis by Layer", fontsize=14)
         plt.xlabel("Layer Index", fontsize=12)
-        plt.ylabel("Silhouette Score (Higher is Better)", fontsize=12)
+        plt.ylabel("Silhouette Score", fontsize=12)
         plt.legend(loc='upper left')
         plt.grid(True, alpha=0.3)
         
@@ -645,8 +643,8 @@ class LayerAnalyzer:
         neg_2d = X_2d[len(pos_vecs):]
 
         plt.figure(figsize=(10, 8))
-        plt.scatter(pos_2d[:, 0], pos_2d[:, 1], c='dodgerblue', s=100, alpha=0.7, label='Happy Prompts', edgecolors='white')
-        plt.scatter(neg_2d[:, 0], neg_2d[:, 1], c='crimson', s=100, alpha=0.7, label='Sad Prompts', edgecolors='white')
+        plt.scatter(pos_2d[:, 0], pos_2d[:, 1], c='crimson', s=100, alpha=0.7, label='Happy Prompts', edgecolors='white')
+        plt.scatter(neg_2d[:, 0], neg_2d[:, 1], c='dodgerblue', s=100, alpha=0.7, label='Sad Prompts', edgecolors='white')
         
         plt.title(f"Latent Space Visualization (Layer {best_layer})", fontsize=14)
         plt.xlabel(f"Principal Component 1 ({pca.explained_variance_ratio_[0]:.1%} variance)", fontsize=12)
