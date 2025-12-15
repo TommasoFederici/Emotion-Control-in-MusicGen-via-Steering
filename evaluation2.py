@@ -7,9 +7,8 @@ from transformers import pipeline
 import librosa
 import warnings
 
-
 # ==========================================
-# 6. EVALUATION CLASS 
+# 6. EVALUATION CLASS (CON BPM)
 # ==========================================
 class Evaluation:
     def __init__(self, audio_folder, output_dir, csv_filename, train_mode=False, label_pos="happy mood", label_neg="sad mood"):
@@ -63,11 +62,10 @@ class Evaluation:
     def extract_acoustic_features(self, audio_path):
         """
         Estrae metriche fisiche dal file audio usando Librosa.
-        Ritorna un dizionario con i valori medi.
-        ORA SENZA RMS.
+        Ritorna un dizionario con i valori medi: CENTROIDE e BPM.
         """
         if not os.path.exists(audio_path):
-            return {"centroid": 0}
+            return {"centroid": 0, "bpm": 0}
 
         try:
             # Carica audio (solo primi 10s per velocità)
@@ -78,13 +76,23 @@ class Evaluation:
             # 1. Spectral Centroid (Brillantezza)
             cent = librosa.feature.spectral_centroid(y=y, sr=sr)
             avg_centroid = np.mean(cent)
+
+            # 2. BPM (Tempo) - NUOVO CODICE
+            # beat_track ritorna (tempo, beats). A noi serve solo tempo.
+            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            
+            # A volte librosa ritorna un array di 1 elemento, a volte un float. Normalizziamo.
+            if isinstance(tempo, np.ndarray):
+                tempo = tempo.item()
             
             return {
-                "centroid": round(float(avg_centroid), 2)
+                "centroid": round(float(avg_centroid), 2),
+                "bpm": round(float(tempo), 2)
             }
             
         except Exception as e:
-            return {"centroid": 0}
+            # In caso di errore (es. file troppo breve o silenzioso)
+            return {"centroid": 0, "bpm": 0}
 
     def _create_bar_chart(self, x_labels, values, title, y_label, y_limit=(-1.1, 1.1)):
         plt.figure(figsize=(12, 6))
@@ -175,7 +183,7 @@ class Evaluation:
 
     # --- SALVATAGGIO CSV  ---
     def save_to_csv(self):
-        """Salva il CSV includendo metriche fisiche (SOLO CENTROIDE) e riga AVG finale."""
+        """Salva il CSV includendo metriche fisiche (CENTROIDE E BPM) e riga AVG finale."""
         os.makedirs(self.output_dir, exist_ok=True)
         full_path = os.path.join(self.output_dir, self.csv_filename)
 
@@ -190,7 +198,7 @@ class Evaluation:
             s_pos = self._get_valence_score(path_pos) if os.path.exists(path_pos) else 0.0
             s_neg = self._get_valence_score(path_neg) if os.path.exists(path_neg) else 0.0
 
-            # Estrai features
+            # Estrai features (ora include anche BPM)
             feat_pos = self.extract_acoustic_features(path_pos)
             feat_neg = self.extract_acoustic_features(path_neg)
 
@@ -200,7 +208,9 @@ class Evaluation:
                     "score_pos": round(s_pos, 4),
                     "score_neg": round(s_neg, 4),
                     "pos_centroid": feat_pos['centroid'],
-                    "neg_centroid": feat_neg['centroid']
+                    "neg_centroid": feat_neg['centroid'],
+                    "pos_bpm": feat_pos['bpm'],
+                    "neg_bpm": feat_neg['bpm']
                 })
             else:
                 path_orig = os.path.join(self.audio_folder, f"{audio_id}_orig.wav")
@@ -216,7 +226,10 @@ class Evaluation:
                     "delta_neg": round(s_neg - s_neutral, 4),
                     "orig_centroid": feat_orig['centroid'],
                     "pos_centroid": feat_pos['centroid'],
-                    "neg_centroid": feat_neg['centroid']
+                    "neg_centroid": feat_neg['centroid'],
+                    "orig_bpm": feat_orig['bpm'],
+                    "pos_bpm": feat_pos['bpm'],
+                    "neg_bpm": feat_neg['bpm']
                 })
 
             if i % 5 == 0:
@@ -233,13 +246,17 @@ class Evaluation:
         
         # === STAMPA MEDIE ===
         print("\n" + "="*40)
-        print("📊  MEDIA PUNTEGGI (AVERAGE SCORES)")
+        print("📊  MEDIA PUNTEGGI (AVERAGE SCORES & METRICS)")
         print("="*40)
         if 'score_pos' in avg_row:
             print(f"🔹 Positive Score Avg: {avg_row['score_pos']}")
         if 'score_neg' in avg_row:
             print(f"🔸 Negative Score Avg: {avg_row['score_neg']}")
         
+        if 'pos_bpm' in avg_row and 'neg_bpm' in avg_row:
+            print(f"🥁 Positive BPM Avg: {avg_row['pos_bpm']}")
+            print(f"🥁 Negative BPM Avg: {avg_row['neg_bpm']}")
+
         # Stampa anche i delta se siamo in FULL MODE
         if 'delta_pos' in avg_row:
             print(f"🔺 Delta Positive Avg: {avg_row['delta_pos']}")
