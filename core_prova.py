@@ -123,11 +123,11 @@ class DynamicSteering:
         try: device = next(module.parameters()).device
         except: device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
-        # Normalizzazione preventiva del vettore di steering
+        # Normalizzazione: Assicuriamoci che il vettore sia unitario (Norma = 1)
         self.vector = steering_vector.to(device).float()
         self.vector = self.vector / (self.vector.norm() + 1e-8)
 
-        # Broadcasting [1, 1, D]
+        # Broadcasting
         if self.vector.dim() == 1: self.vector = self.vector.view(1, 1, -1)
         elif self.vector.dim() == 2: self.vector = self.vector.unsqueeze(1)
 
@@ -135,27 +135,20 @@ class DynamicSteering:
         if isinstance(output, tuple): h, other = output[0], output[1:]
         else: h, other = output, ()
         
-        # 1. Calcola l'Energia (Norma) Originale del segnale
-        # Questo ci serve per non distruggere il volume/coerenza
-        orig_norm = h.norm(p=2, dim=-1, keepdim=True)
-        
-        # 2. Calcola Alpha
+        # Calcolo Alpha
         decayed_value = self.base_alpha * (self.decay ** self.step)
-        if self.base_alpha > 0:
+        
+        # Gestione segno: se base_alpha è positivo, stiamo sopra min_alpha
+        # se è negativo (steering opposto), stiamo sotto -min_alpha
+        if self.base_alpha >= 0:
             current_alpha = max(decayed_value, self.min_alpha)
         else:
             current_alpha = min(decayed_value, -self.min_alpha)
+            
         self.step += 1
         
-        # 3. Applica Steering (Somma Semplice)
-        # Qui cambiamo la direzione del vettore
-        h_steered = h + (current_alpha * self.vector)
-        
-        # 4. Rinormalizzazione (Energy Preservation)
-        # Riportiamo il vettore sterzato alla stessa magnitudine dell'originale
-        # Questo impedisce l'esplosione (rumore) o il collasso (silenzio)
-        new_norm = h_steered.norm(p=2, dim=-1, keepdim=True)
-        h_new = h_steered * (orig_norm / (new_norm + 1e-8))
+        # Applicazione Steering
+        h_new = h + (current_alpha * self.vector)
         
         if other: return (h_new,) + other
         return h_new
