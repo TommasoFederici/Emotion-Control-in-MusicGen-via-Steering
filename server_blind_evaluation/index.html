@@ -6,18 +6,47 @@
     <title>Valutazione Blind Audio</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         
-        h1 { text-align: center; color: #2c3e50; margin-bottom: 10px; }
-        .user-info { text-align: center; margin-bottom: 30px; color: #7f8c8d; font-size: 0.9em; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        .user-info { text-align: center; margin-bottom: 25px; color: #7f8c8d; font-size: 0.9em; }
         
-        /* Stile Lista Tracce */
-        .track-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
+        /* Nuova Box Spiegazione Elegante */
+        .instruction-card {
+            background-color: #deedfc;
+            border-left: 5px solid #3498db;
+            padding: 20px 25px;
+            margin-bottom: 30px;
+            border-radius: 0 8px 8px 0;
+            box-shadow: inset 0 0 10px rgba(52, 152, 219, 0.05);
+        }
+        
+        .instruction-card h2 {
+            margin-top: 0;
+            color: #2980b9;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
         }
 
+        .instruction-card p {
+            margin: 0;
+            line-height: 1.6;
+            color: #000000;
+            font-size: 0.95em;
+        }
+
+        .instruction-card ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .instruction-card li {
+            margin-bottom: 8px;
+        }
+
+        /* Stile Lista Tracce */
         .track-row {
             display: flex;
             align-items: center;
@@ -26,9 +55,8 @@
             border-bottom: 1px solid #eee;
             transition: background 0.2s;
         }
-        .track-row:hover { background-color: #f9f9f9; }
+        .track-row:hover { background-color: #fcfcfc; }
 
-        /* Colonna Numero */
         .track-number {
             font-weight: bold;
             color: #3498db;
@@ -37,44 +65,54 @@
             font-size: 1.1em;
         }
 
-        /* Player Audio */
         audio { 
             flex-grow: 1;
             margin: 0 20px; 
             height: 40px; 
         }
         
-        /* Dropdown Selezione */
         select.emotion-select {
             padding: 10px;
-            border-radius: 5px;
+            border-radius: 6px;
             border: 1px solid #bdc3c7;
             background-color: white;
             width: 160px;
             cursor: pointer;
-            font-size: 1em;
+            font-size: 0.95em;
+            transition: border-color 0.2s;
         }
         select.emotion-select:focus { border-color: #3498db; outline: none; }
 
-        /* Bottone Finale */
         .submit-section { text-align: center; margin-top: 40px; }
         button#btnInvia {
             background-color: #3498db; color: white; border: none;
-            padding: 15px 50px; font-size: 1.2em; border-radius: 50px;
+            padding: 16px 60px; font-size: 1.1em; border-radius: 50px;
             cursor: pointer; transition: all 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
         }
-        button#btnInvia:hover { background-color:  #5aade5; transform: translateY(-2px); }
-        button#btnInvia:disabled { background-color: #95a5a6; cursor: not-allowed; transform: none; }
+        button#btnInvia:hover { background-color: #2980b9; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4); }
+        button#btnInvia:disabled { background-color: #95a5a6; cursor: not-allowed; transform: none; box-shadow: none; }
 
+        #loading-msg { color: #7f8c8d; font-style: italic; }
     </style>
 </head>
 <body>
-
-    <div class="container">
-        <h1>Blind Evaluation Test</h1>
+<div class="container">
+        <h1>Perception of Emotions in AI-Generated Music</h1>
         <div class="user-info">ID Valutatore: <span id="displayUserId">...</span></div>
         
+        <div class="instruction-card">
+            <h2>Istruzioni per il test</h2>
+            <p><strong>1. Ascolta le tracce:</strong> Brani generati dall'IA. Puoi ascoltarli nell'ordine che preferisci.</p>
+            <p><strong>2. Identifica l'emozione:</strong> Seleziona l'emozione che senti prevalere:</p>
+            <ul>
+                <li><i>Happy</i> (Felice): La musica è gioiosa, luminosa o energica.</li>
+                <li><i>Sad</i> (Triste): La musica è malinconica, cupa o deprimente.</li>
+                <li><i>Neutral</i> (Neutrale): La musica è priva di direzione emotiva predominate.</li>
+            </ul>
+            <p><strong>3. Invia i risultati:</strong> Clicca sul pulsante in fondo dopo aver completato tutte le scelte.</p>
+        </div>
+
         <div id="loading-msg" style="text-align:center; padding: 20px;">Caricamento tracce in corso...</div>
         
         <div id="main-list-container"></div>
