@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 2. Definisce i percorsi esatti per gli altri file nella stessa cartella
 HTML_FILE = os.path.join(BASE_DIR, 'index.html')
-AUDIO_FOLDER = os.path.join(BASE_DIR, '../data/prova')
+AUDIO_FOLDER = r"C:\Users\tomma\OneDrive\Documenti\Git Projects\Emotion-Control-in-MusicGen-via-Steering\server_blind_evaluation\blind_evaluation_test_audio"
 CSV_FILE = os.path.join(BASE_DIR, 'risultati_test.csv')
 
 # --- INIZIALIZZAZIONE ---
@@ -86,4 +86,4 @@ if __name__ == '__main__':
     print(f"Sto cercando index.html in: {HTML_FILE}")
     print("Vai su http://localhost:5000")
     print("------------------------------------------------")
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000) 

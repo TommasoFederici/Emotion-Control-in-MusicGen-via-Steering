@@ -130,6 +130,16 @@
         // Opzioni disponibili (Puoi aggiungerne altre qui se vuoi)
         const options = ["Happy", "Sad", "Neutral"];
 
+        // --- NUOVA FUNZIONE: FERMA ALTRI AUDIO ---
+        function stopOtherAudios(currentAudio) {
+            const allAudios = document.querySelectorAll('audio');
+            allAudios.forEach(audio => {
+                if (audio !== currentAudio) {
+                    audio.pause();
+                }
+            });
+        }
+
         // 2. Caricamento File dal Server
         fetch('/lista-audio')
         .then(res => res.json())
@@ -176,6 +186,13 @@
                     </select>
                 `;
                 container.appendChild(row);
+
+                // --- AGGIUNTA EVENT LISTENER PER STOPPARE ALTRI AUDIO ---
+                // Recuperiamo l'elemento audio appena inserito in questa riga
+                const audioEl = row.querySelector('audio');
+                audioEl.addEventListener('play', function() {
+                    stopOtherAudios(this);
+                });
             });
         }
 
@@ -237,7 +254,7 @@
             })
             .catch(err => {
                 console.error(err);
-                alert("Errore di connessione col server.");
+                alert("Errore di connessione col server. Chiedi a tommi o lilla di controllare che sia tutto ok :)");
                 btn.disabled = false;
                 btn.innerText = "Invia Valutazione";
             });
