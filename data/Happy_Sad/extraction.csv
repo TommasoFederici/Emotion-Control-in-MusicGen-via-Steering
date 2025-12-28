@@ -1,0 +1,51 @@
+ID;positive_prompt;negative_prompt;melody_path
+1;A solo piano melody, exhibiting a happy, cheerful and bright mood;A solo piano melody, exhibiting a sad, depressive and dark mood;data/melodies/extraction/01_scale_major.wav
+2;An acoustic guitar improvisation with cheerful and happy vibes;An acoustic guitar improvisation with depressive and sad vibes;data/melodies/extraction/02_arpeggio_slow.wav
+3;A cinematic violin piece, with bright, cheerful and happy atmosphere;A cinematic violin piece, with dark, depressive and sad atmosphere;data/melodies/extraction/03_random.wav
+4;A happy and cheerful classical violin solo;A sad and depressive classical violin solo;data/melodies/extraction/04_scale_down.wav
+5;A soft flute performance full of cheerful, bright energy;A soft flute performance full of depressive, dark energy;data/melodies/extraction/05_pentatonic.wav
+6;A string quartet composition featuring a bright and happy tone with violin;A string quartet composition featuring a dark and sad tone with violin;data/melodies/extraction/01_scale_major.wav
+7;A flute melody featuring happy, cheerful notes;A flute melody featuring sad, depressive notes;data/melodies/extraction/02_arpeggio_slow.wav
+8;A piano solo piece, with cheerful and bright character;A piano solo piece, with depressive and dark character;data/melodies/extraction/03_random.wav
+9;A bright, happy and energetic grand piano concerto intro;A dark, sad and energetic grand piano concerto intro;data/melodies/extraction/04_scale_down.wav
+10;A Spanish guitar track evoking happy and cheerful emotion;A Spanish guitar track evoking sad and depressive emotion;data/melodies/extraction/05_pentatonic.wav
+11;An ambient piano progression, with a cheerful, bright feeling;An ambient piano progression, with a depressive, dark feeling;data/melodies/extraction/01_scale_major.wav
+12;A bright and happy jazz flute improvisation;A dark and sad jazz flute improvisation;data/melodies/extraction/02_arpeggio_slow.wav
+13;A cheerful, bright folk guitar song;A depressive, dark folk guitar song;data/melodies/extraction/03_random.wav
+14;A happy, cheerful classical piano sonata;A sad, depressive classical piano sonata;data/melodies/extraction/04_scale_down.wav
+15;A bright, happy medieval violin tune;A dark, sad medieval violin tune;data/melodies/extraction/05_pentatonic.wav
+16;A cheerful, bright country guitar riff, with heavy shades;A depressive, dark country guitar riff, with heavy shades;data/melodies/extraction/01_scale_major.wav
+17;A happy, bright romantic piano ballad;A sad, depressive romantic piano ballad;data/melodies/extraction/02_arpeggio_slow.wav
+18;A bright, cheerful pop violin melody;A dark, depressive pop violin melody;data/melodies/extraction/03_random.wav
+19;A cheerful, happy ambient flute soundscape;A depressive, dark ambient flute soundscape;data/melodies/extraction/04_scale_down.wav
+20;A happy, bright blues guitar solo, with deep tones;A sad, depressive blues guitar solo, with deep tones;data/melodies/extraction/05_pentatonic.wav
+21;A bright, cheerful jazz piano standard;A dark, depressive jazz piano standard;data/melodies/extraction/01_scale_major.wav
+22;A cheerful, happy symphony violin movement;A depressive, dark symphony violin movement;data/melodies/extraction/02_arpeggio_slow.wav
+23;A happy, bright rock guitar anthem;A sad, depressive rock guitar anthem;data/melodies/extraction/03_random.wav
+24;A bright, cheerful orchestral flute piece;A dark, depressive orchestral flute piece;data/melodies/extraction/04_scale_down.wav
+25;A cheerful, happy gospel piano melody, with vibrant traces;A depressive, dark gospel piano melody, with vibrant traces;data/melodies/extraction/05_pentatonic.wav
+26;A happy, bright Celtic violin jig;A sad, depressive Celtic violin jig;data/melodies/extraction/01_scale_major.wav
+27;A bright, cheerful electronic guitar loop;A dark, depressive electronic guitar loop;data/melodies/extraction/02_arpeggio_slow.wav
+28;A cheerful, happy meditative piano piece;A depressive, dark meditative piano piece;data/melodies/extraction/03_random.wav
+29;A happy, bright film score violin theme;A sad, depressive film score violin theme;data/melodies/extraction/04_scale_down.wav
+30;A bright, cheerful reggae guitar strum;A dark, depressive reggae guitar strum;data/melodies/extraction/05_pentatonic.wav
+31;A cheerful, happy video game flute track;A depressive, dark video game flute track;data/melodies/extraction/01_scale_major.wav
+32;A happy, bright Bossa Nova piano rhythm;A sad, depressive Bossa Nova piano rhythm;data/melodies/extraction/02_arpeggio_slow.wav
+33;A bright, cheerful tango violin performance;A dark, depressive tango violin performance;data/melodies/extraction/03_random.wav
+34;A cheerful, happy indie guitar melody;A depressive, dark indie guitar melody;data/melodies/extraction/04_scale_down.wav
+35;A happy, bright lullaby flute tune;A sad, depressive lullaby flute tune;data/melodies/extraction/05_pentatonic.wav
+36;A bright, cheerful chamber piano music;A dark, depressive chamber piano music;data/melodies/extraction/01_scale_major.wav
+37;A cheerful, happy energetic violin solo;A depressive, dark energetic violin solo;data/melodies/extraction/02_arpeggio_slow.wav
+38;A happy, bright festive guitar song, with intense shades;A sad, depressive festive guitar song, with intense shades;data/melodies/extraction/03_random.wav
+39;A bright, cheerful world music flute melody;A dark, depressive world music flute melody;data/melodies/extraction/04_scale_down.wav
+40;A cheerful, happy experimental piano sound, with vivid tones;A depressive, dark experimental piano sound, with vivid tones;data/melodies/extraction/05_pentatonic.wav
+41;A happy, bright orchestral violin crescendo;A sad, depressive orchestral violin crescendo;data/melodies/extraction/01_scale_major.wav
+42;A bright, cheerful dance guitar track;A dark, depressive dance guitar track;data/melodies/extraction/02_arpeggio_slow.wav
+43;A cheerful, happy chillwave flute pad;A depressive, dark chillwave flute pad;data/melodies/extraction/03_random.wav
+44;A happy, bright minimalist piano composition;A sad, depressive minimalist piano composition;data/melodies/extraction/04_scale_down.wav
+45;A bright, cheerful synthwave violin lead;A dark, depressive synthwave violin lead;data/melodies/extraction/05_pentatonic.wav
+46;A cheerful, happy latin guitar groove;A depressive, dark latin guitar groove;data/melodies/extraction/01_scale_major.wav
+47;A happy, bright romantic flute serenade;A sad, depressive romantic flute serenade;data/melodies/extraction/02_arpeggio_slow.wav
+48;A bright, cheerful dramatic piano underscore, with clear traces;A dark, depressive dramatic piano underscore, with clear traces;data/melodies/extraction/03_random.wav
+49;A cheerful, happy energetic guitar riff;A depressive, dark energetic guitar riff;data/melodies/extraction/04_scale_down.wav
+50;A happy, bright playful violin pizzicato;A sad, depressive playful violin pizzicato;data/melodies/extraction/05_pentatonic.wav
