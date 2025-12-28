@@ -2,39 +2,39 @@
 
 **Authors:** Lucia Fornetti & Tommaso Federici
 
-Questo repository contiene il codice ufficiale per il progetto **"Emotion control in MusicGen via Activation Steering"**.
-Il progetto implementa un framework leggero per controllare attributi emotivi di alto livello (es. "Happy" vs "Sad") in **MusicGen** utilizzando la tecnica dell'**Activation Steering**, eliminando la necessità di un fine-tuning costoso del modello.
+This repository contains the official code for the project **"Emotion control in MusicGen via Activation Steering"**.
+The project implements a lightweight framework to control high-level emotional attributes (e.g., "Happy" vs "Sad") in **MusicGen** using **Activation Steering**, eliminating the need for expensive fine-tuning.
 
-## 🎵 Caratteristiche Principali
+## 🎵 Key Features
 
-* **Zero Fine-Tuning:** Il controllo emotivo avviene interamente a tempo di inferenza iniettando vettori di steering nelle attivazioni interne del modello.
-* **Strategia Multi-Block:** Utilizziamo un approccio innovativo che inietta vettori diversi in blocchi specifici del Transformer per controllare separatamente caratteristiche ritmiche (Mid-Block, Layer 12) e timbriche (Deep-Block, Layer 30).
-* **Alpha Decay:** Implementazione di un meccanismo di decadimento del coefficiente di steering ($\gamma = 0.998$) per mantenere la coerenza strutturale dell'audio ed evitare artefatti.
-* **Efficiente:** Basato sul checkpoint `musicgen-melody` (utilizzato in modalità text-only).
+* **Zero Fine-Tuning:** Emotional control is performed entirely at inference time by injecting steering vectors into the model's internal activations.
+* **Multi-Block Strategy:** We employ an innovative approach that injects distinct vectors into specific Transformer blocks to separately control rhythmic features (Mid-Block, Layer 12) and timbral features (Deep-Block, Layer 30).
+* **Alpha Decay:** Implementation of a steering coefficient decay mechanism ($\gamma = 0.998$) to maintain audio structural coherence and prevent artifacts.
+* **Efficient:** Built upon the `musicgen-melody` checkpoint (utilized in text-only mode).
 
-## 📂 Struttura della Repository
+## 📂 Repository Structure
 
-* `Emotion_Control_ActivationSteering_demo_code_colab.ipynb`: **Notebook principale**. Contiene tutto il codice necessario per caricare il modello, estrarre i vettori (o caricarli) e generare musica controllata. È pronto per l'uso su Google Colab.
-* `core_colab_melody.py`: Contiene la logica core del progetto, incluse le classi per l'hooking del modello MusicGen e l'implementazione dello steering.
+* `Emotion_Control_ActivationSteering_demo_code_colab.ipynb`: **Main Notebook**. It contains all the code required to load the model, extract (or load) vectors, and generate steered music. Ready to use on Google Colab.
+* `core_colab_melody.py`: Contains the core logic of the project, including the custom classes for hooking the MusicGen model and implementing the steering mechanism.
 * `data/`:
-    * `Happy_Sad/`: Dataset di prompt utilizzati per l'estrazione dei vettori (`extraction.csv`) e per i test (`inference.csv`).
-    * `vectors/`: Contiene i tensori pre-calcolati (`steering_vectors.pt`) per l'emozione Happy/Sad, permettendo l'inferenza immediata senza dover rieseguire l'estrazione.
-* `server_blind_evaluation/`: Codice (Python/HTML) utilizzato per condurre il *blind listening test* descritto nel report per la validazione umana dei risultati.
+    * `Happy_Sad/`: Datasets of prompts used for vector extraction (`extraction.csv`) and testing (`inference.csv`).
+    * `vectors/`: Contains pre-computed tensors (`steering_vectors.pt`) for the Happy/Sad directions, allowing for immediate inference without re-running the extraction phase.
+* `server_blind_evaluation/`: Python/HTML code used to conduct the *blind listening test* described in the report for human validation.
 
-## 🚀 Quick Start (Come usare)
+## 🚀 Quick Start
 
-Il modo più semplice per provare il modello è utilizzare il notebook fornito:
+The easiest way to test the model is using the provided notebook:
 
-1.  Apri il file `Emotion_Control_ActivationSteering_demo_code_colab.ipynb` (consigliato l'uso di Google Colab con GPU T4).
-2.  Installa le dipendenze richieste (eseguendo la prima cella).
-3.  Carica i vettori pre-calcolati da `data/vectors/steering_vectors.pt` oppure esegui la fase di estrazione sui tuoi prompt.
-4.  Esegui la generazione modificando il parametro `steering_strength` (valori positivi per "Happy", negativi per "Sad").
+1.  Open `Emotion_Control_ActivationSteering_demo_code_colab.ipynb` (Google Colab with a T4 GPU is recommended).
+2.  Install the required dependencies (run the first cell).
+3.  Load the pre-computed vectors from `data/vectors/steering_vectors.pt` or run the extraction phase on your own prompts.
+4.  Run the generation by modifying the `steering_strength` parameter (positive values for "Happy", negative values for "Sad").
 
-## 🧠 Metodologia in Breve
+## 🧠 Methodology in Brief
 
-Il sistema interviene direttamente sul residual stream del Transformer durante la generazione autoregressiva. Abbiamo identificato due punti di intervento ottimali tramite analisi della *Silhouette Score*:
+The system intervenes directly on the residual stream of the Transformer during autoregressive generation. Through *Silhouette Score* analysis, we identified two optimal intervention points:
 
-1.  **Mid-Block (Layer 11-14):** Controlla feature a basso livello come tempo e brillantezza.
-2.  **Deep-Block (Layer 27-29):** Controlla feature timbriche e di texture.
+1.  **Mid-Block (Layers 11-14):** Controls low-level features such as tempo and brightness.
+2.  **Deep-Block (Layers 27-29):** Controls timbral and textural features.
 
-L'intensità dello steering decade nel tempo secondo la formula $\alpha(t) = \alpha_0 \cdot \gamma^t$ per garantire transizioni naturali e prevenire la saturazione del segnale.
+The steering intensity decays over time according to the formula $\alpha(t) = \alpha_0 \cdot \gamma^t$ to ensure natural transitions and prevent signal saturation.
