@@ -40,7 +40,7 @@ To evaluate the quality of the steering, you can listen to the generated audio s
 
 ## 🚀 Quick Start
 
-The easiest way to test the model is using the provided notebook:
+The easiest way to test the framework is using the provided notebook:
 
 1.  Open `Emotion_Control_ActivationSteering_demo_code_colab.ipynb` (Google Colab with a T4 GPU is recommended).
 2.  Install the required dependencies (run the first cell).
