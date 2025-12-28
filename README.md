@@ -10,7 +10,24 @@ The project implements a lightweight framework to control high-level emotional a
 * **Zero Fine-Tuning:** Emotional control is performed entirely at inference time by injecting steering vectors into the model's internal activations.
 * **Multi-Block Strategy:** We employ an innovative approach that injects distinct vectors into specific Transformer blocks to separately control rhythmic features (Mid-Block, Layer 12) and timbral features (Deep-Block, Layer 30).
 * **Alpha Decay:** Implementation of a steering coefficient decay mechanism ($\gamma = 0.998$) to maintain audio structural coherence and prevent artifacts.
-* **Efficient:** Built upon the `musicgen-melody` checkpoint (utilized in text-only mode).
+
+## 🧠 Methodology in Brief
+
+The system intervenes directly on the residual stream of the Transformer during autoregressive generation. Through *Silhouette Score* analysis, we identified two optimal intervention points:
+
+1.  **Mid-Block (Layers 11-14):** Controls low-level features such as tempo and brightness.
+2.  **Deep-Block (Layers 27-29):** Controls timbral and textural features.
+
+The steering intensity decays over time according to the formula $\alpha(t) = \alpha_0 \cdot \gamma^t$ to ensure natural transitions and prevent signal saturation.
+
+## 🎧 Audio Samples
+
+To evaluate the quality of the steering, you can listen to the generated audio samples:
+
+* **Repository:** Examples used for the *blind listening test* (Original/Happy/Sad triplets) are available locally in the folder [`server_blind_evaluation/blind_evaluation_test_audio/`](server_blind_evaluation/blind_evaluation_test_audio/).
+* **Google Drive:** Or at the following link:
+    👉 **[LISTEN TO SAMPLES HERE (Google Drive)](https://drive.google.com/drive/folders/1CyR_g8qNG2x98fzPSFNg0Jg23TOs1SDC?usp=sharing)**
+
 
 ## 📂 Repository Structure
 
@@ -29,12 +46,3 @@ The easiest way to test the model is using the provided notebook:
 2.  Install the required dependencies (run the first cell).
 3.  Load the pre-computed vectors from `data/vectors/steering_vectors.pt` or run the extraction phase on your own prompts.
 4.  Run the generation by modifying the `steering_strength` parameter (positive values for "Happy", negative values for "Sad").
-
-## 🧠 Methodology in Brief
-
-The system intervenes directly on the residual stream of the Transformer during autoregressive generation. Through *Silhouette Score* analysis, we identified two optimal intervention points:
-
-1.  **Mid-Block (Layers 11-14):** Controls low-level features such as tempo and brightness.
-2.  **Deep-Block (Layers 27-29):** Controls timbral and textural features.
-
-The steering intensity decays over time according to the formula $\alpha(t) = \alpha_0 \cdot \gamma^t$ to ensure natural transitions and prevent signal saturation.
