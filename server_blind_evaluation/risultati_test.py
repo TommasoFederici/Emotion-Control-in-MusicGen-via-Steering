@@ -23,24 +23,15 @@ def analyze_and_plot():
     
     try:
         # 1. LETTURA ROBUSTA DEL CSV
-        # Il tuo file ha spazi dopo la virgola (es. ", date") -> skipinitialspace=True
-        # Il tuo file ha una virgola finale nella header -> engine='python' gestisce meglio errori di parsing
         try:
             df = pd.read_csv(input_csv, sep=',', skipinitialspace=True)
         except:
-            # Fallback se ci sono problemi strani di righe
             df = pd.read_csv(input_csv, sep=',', on_bad_lines='skip', skipinitialspace=True)
 
-        # Rimuove eventuali colonne vuote create dalla virgola finale (es. "Unnamed: 5")
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        
-        # Pulisce i nomi delle colonne da spazi extra
         df.columns = df.columns.str.strip()
         
-        print(f"📋 Colonne trovate: {df.columns.tolist()}")
-
-        # 2. RINOMINA COLONNE (Standardizzazione)
-        # Mappiamo i TUOI nomi (dal csv che mi hai mandato) ai nomi dello script
+        # 2. RINOMINA COLONNE
         rename_map = {
             'user_answer': 'User_Choice',
             'trak_name': 'Filename',
@@ -49,34 +40,24 @@ def analyze_and_plot():
         }
         df.rename(columns=rename_map, inplace=True)
 
-        # Controllo di sicurezza
         if 'User_Choice' not in df.columns:
-            print("❌ ERRORE: Non trovo la colonna delle risposte (es. 'user_answer').")
-            print(f"   Colonne attuali: {df.columns.tolist()}")
+            print("❌ ERRORE: Colonna 'user_answer' non trovata.")
             return
 
         # 3. CALCOLO PUNTEGGI
-        # Converte Happy->1, Sad->-1, ecc.
-        # .str.strip() è fondamentale perché nel CSV potresti avere "Sad " con spazi
         df['User_Choice'] = df['User_Choice'].astype(str).str.strip()
         df['Numeric_Score'] = df['User_Choice'].map(score_map).fillna(0).astype(int)
 
-        # Raggruppa per ID traccia e Nome File
+        # Raggruppa per ID traccia e Nome File per ottenere la media per ogni file
         grouped = df.groupby(['Track_ID_Ref', 'Filename']).agg(
-            # Assicurati che il nome qui sia 'Average_Score'
-            Average_Score=('Numeric_Score', 'mean'), 
-            Num_Votes=('User_ID', 'count')
+            Average_Score=('Numeric_Score', 'mean')
         ).reset_index()
 
-        # Ordina per ID
+        # Assicura che ID sia numerico per l'ordinamento
         grouped['Track_ID_Ref'] = pd.to_numeric(grouped['Track_ID_Ref'], errors='coerce')
         grouped = grouped.sort_values(by=['Track_ID_Ref'])
-        
-        # Salva CSV dei punteggi
-        grouped.to_csv(output_scores_csv, index=False)
-        print(f"✅ Punteggi salvati in: {output_scores_csv}")
 
-        # 4. CATEGORIE E PLOT
+        # 4. CALCOLO DELTA E STRUTTURAZIONE DATI
         def get_category(filename):
             s = str(filename).lower().strip()
             if "_pos" in s: return "Positive"
@@ -86,62 +67,93 @@ def analyze_and_plot():
 
         grouped['Category'] = grouped['Filename'].apply(get_category)
 
-        # Calcola scala grafico
-        max_abs_score = grouped['Average_Score'].abs().max() 
-        if pd.isna(max_abs_score) or max_abs_score == 0: max_abs_score = 1
-        y_limit = max_abs_score + 1
+        # Creazione Pivot Table: Una riga per Track ID, colonne per le categorie
+        pivot_df = grouped.pivot_table(index='Track_ID_Ref', columns='Category', values='Average_Score')
 
-        categories = ["Positive", "Negative", "Neutral"]
+        # Assicura che tutte le colonne esistano
+        for col in ['Positive', 'Negative', 'Neutral']:
+            if col not in pivot_df.columns:
+                pivot_df[col] = np.nan
+
+        # Calcolo dei DELTA
+        pivot_df['Delta_Pos'] = pivot_df['Positive'] - pivot_df['Neutral']
+        pivot_df['Delta_Neg'] = pivot_df['Negative'] - pivot_df['Neutral']
+
+        # Calcolo MEDIE totali
+        averages = pivot_df.mean()
+        avg_row = pd.DataFrame(averages).T
+        avg_row.index = ['AVG']
         
-        for cat in categories:
-            subset = grouped[grouped['Category'] == cat]
-            if subset.empty:
-                print(f"⚠️ Nessun dato per la categoria: {cat}")
-                continue
+        final_df = pd.concat([pivot_df, avg_row])
 
-            ids = subset['Track_ID_Ref'].astype(str).tolist()
-            scores = subset['Average_Score'].tolist()
-            
-            # Titoli
-            if cat == "Positive": title = "Valutazione Tracce POSITIVE (Target: Happy)"
-            elif cat == "Negative": title = "Valutazione Tracce NEGATIVE (Target: Sad)"
-            else: title = "Valutazione Tracce ORIGINALI (Target: Neutral)"
+        # Salva CSV
+        final_df.to_csv(output_scores_csv, sep=',', index=True, float_format='%.3f')
+        print(f"✅ File CSV aggiornato con Delta e Medie salvato in: {output_scores_csv}")
 
-            create_bar_chart(ids, scores, title, output_img_dir, cat.lower(), max_abs_score, y_limit)
+        # 5. GENERAZIONE GRAFICI
+        plot_data = pivot_df.copy()
+        ids = plot_data.index.astype(str).tolist()
+
+        # Helper aggiornato per accettare limiti custom
+        def plot_column_safe(col_name, title, suffix, custom_limit):
+            if col_name in plot_data.columns:
+                values = plot_data[col_name].fillna(0).tolist()
+                create_bar_chart(ids, values, title, output_img_dir, suffix, y_lim=custom_limit)
+            else:
+                print(f"⚠️ Dati mancanti per: {col_name}")
+
+        # --- GRAFICI SCORE (Range -1 a 1) ---
+        plot_column_safe('Positive', "Positive Tracks Evaluation", "positive", 1.0)
+        plot_column_safe('Negative', "Negative Tracks Evaluation", "negative", 1.0)
+        plot_column_safe('Neutral', "Neutral Tracks Evaluation", "neutral", 1.0)
+        
+        # --- GRAFICI DELTA (Range -2 a 2) ---
+        plot_column_safe('Delta_Pos', "Delta Positive (Pos - Neutral)", "delta_pos", 2.0)
+        plot_column_safe('Delta_Neg', "Delta Negative (Neg - Neutral)", "delta_neg", 2.0)
 
     except Exception as e:
         print(f"❌ Errore durante l'esecuzione: {e}")
         import traceback
         traceback.print_exc()
 
-def create_bar_chart(x_labels, values, title, output_dir, filename_suffix, max_val, y_lim):
+def create_bar_chart(x_labels, values, title, output_dir, filename_suffix, y_lim):
     plt.figure(figsize=(12, 6))
     x_pos = np.arange(len(x_labels))
     
     # Colori: Blu(Negativo) -> Bianco(0) -> Rosso(Positivo)
     cmap = plt.get_cmap('bwr')
-    norm = mcolors.Normalize(vmin=-max_val, vmax=max_val) 
+    
+    # La normalizzazione colore segue i limiti del grafico
+    # Se y_lim è 2, il rosso massimo sarà a +2. Se è 1, sarà a +1.
+    norm = mcolors.Normalize(vmin=-y_lim, vmax=y_lim) 
     bar_colors = cmap(norm(values))
 
     bars = plt.bar(x_pos, values, color=bar_colors, edgecolor='black', width=0.6)
     
     plt.axhline(0, color='black', linewidth=1.5)
+    
+    # Imposta i limiti dell'asse Y in base al parametro passato
     plt.ylim(-y_lim, y_lim)
     
     plt.title(title, fontsize=16)
     plt.xlabel("Track ID", fontsize=12)
-    plt.ylabel("Mean Score", fontsize=12)
+    plt.ylabel("Score / Delta", fontsize=12)
     
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.xticks(x_pos, x_labels, rotation=0)
 
-    # Etichette numeriche sulle barre
+    # Etichette numeriche
     offset = y_lim * 0.05
     for bar, score in zip(bars, values):
-        y_txt = score + offset if score >= 0 else score - offset
-        # Formattazione per float con 4 cifre decimali
+        # Evita che l'etichetta esca dal grafico
+        draw_y = score
+        if score > y_lim: draw_y = y_lim - offset
+        if score < -y_lim: draw_y = -y_lim + offset
+        
+        y_txt = draw_y + offset if score >= 0 else draw_y - offset
+        
         plt.text(bar.get_x() + bar.get_width()/2, y_txt, f"{score:.2f}", 
-                ha='center', va='center', fontweight='bold', fontsize=10)
+                ha='center', va='center', fontweight='bold', fontsize=9)
 
     plt.tight_layout()
     
