@@ -31,6 +31,8 @@ To evaluate the quality of the steering, you can listen to the generated audio s
 
 ## 📂 Repository Structure
 
+* `report_federici_fornetti.pdf`: Official project report containing technical details and experimental results.
+
 * `Emotion_Control_ActivationSteering_demo_code_colab.ipynb`: **Main Notebook**. It contains all the code required to load the model, extract (or load) vectors, and generate steered music. Ready to use on Google Colab.
 * `core_colab_melody.py`: Contains the core logic of the project, including the custom classes for hooking the MusicGen model and implementing the steering mechanism.
 * `data/`:
